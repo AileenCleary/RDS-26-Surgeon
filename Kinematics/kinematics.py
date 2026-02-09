@@ -13,6 +13,7 @@ L0 = 20; L1 = 40; L2 = 25; L3 = 20
 th0 = np.deg2rad(0)
 th1 = np.deg2rad(15)
 th2 = np.deg2rad(30)
+th3 = np.deg2rad(0)
 
 # Pulley Radii (mm) [r_<shaft#><pulley#>]
 r0 = 10 # splay

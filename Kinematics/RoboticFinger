@@ -1,0 +1,25 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import sympy as sym
+
+class RoboticFinger:
+    """ Robotic Finger 
+    L_L : 4-vector of link lengths (mm).
+    Th_J : 4-vector of joint angles (rads).
+    R_P : Dictionary of pulleys to radii. Pulley naming convention r<shaft#><pulley#>.
+    """
+    def __init__(self, link_lengths, joint_angles, pulley_radii):
+        self.L_L = link_lengths
+        self.Th_J = joint_angles
+        self.R_P = pulley_radii
+        return
+    
+def main():
+    link_lengths = [20, 40, 25, 20]
+    joint_angles = [np.deg2rad(x) for x in [0, 15, 30, 0]]
+    pulley_radii = {"r0":10, "r11":10,"r12":10, "r13":10, "r21":10, "r22":10, "r23":10, "r24":10, "r31":10, \
+                    "r41":10, "r42":10, "r43":10, "r51":10, "r61":10, "r62":10}
+    return
+
+if __name__ == "__main__":
+    main()
