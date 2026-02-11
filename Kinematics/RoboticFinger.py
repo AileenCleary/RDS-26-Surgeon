@@ -63,22 +63,39 @@ class RoboticFinger:
     Tau_J : 3-vector of joint torques. 3rd torque is tau_PIP generalized, i.e., accounting for coupling with DIP.
     """
     def __init__(self, link_lengths, joint_angles, motor, sf, pulleys, tendon_sign, fingertip_pos):
-        self.L_L = link_lengths
-        self.Th_J = joint_angles
+        self.L_L = np.array(link_lengths)
+        self._Th_J = np.array(joint_angles)
+
         self.Motor = motor
         self.SF = sf
         self.P = pulleys
+        self.D = np.array(tendon_sign)
+
+        self.fingertip_pos = float(fingertip_pos)
+
         self.coupling_ratio = self.P.r(4,2)/self.P.r(6,2)
+
+    @property
+    def Th_J(self):
+        return self._Th_J
+    
+    @Th_J.setter
+    def Th_J(self, joint_angles):
+        self._Th_J = np.array(joint_angles)
+        self.update_state()
+
+    def update_state(self):
         self.T_T = self.estimate_tendon_tension()
+
         self.R = self.tendon_route()
-        self.D = tendon_sign
         self.A = self.D * self.R
         self.Tau_J = self.joint_torque()
-        self.fingertip_pos = fingertip_pos
+
         self.Tmatrix = self.transformation_matrix(self.fingertip_pos)
         self.T_0F = self.Tmatrix[-1]
         self.tip_pos = self.T_0F[0:3, 3]
         self.tip_orientation_matrix = self.T_0F[0:3, 0:3]
+
 
     def estimate_tendon_tension(self):
         """ Estimated 'actuator-side' available tension. Assumes each tendon has its own
@@ -126,6 +143,11 @@ class RoboticFinger:
         T_34 = self.DH(self.Th_J[2]*self.coupling_ratio, d=0, a=self.L_L[3], alpha=0)
         T_4F = self.DH(0, d=0, a=fingertip_pos, alpha=0)
         return [T_01, T_12, T_23, T_34, T_4F, T_01 @ T_12 @ T_23 @ T_34 @ T_4F]
+    
+    def forward_kinematics(self, joint_angles=None):
+        if joint_angles is not None:
+            self.Th_J = joint_angles
+        return self.tip_pos
     
     def inverse_kinematics(self, pos):
         x, y, z = pos
@@ -192,7 +214,8 @@ def main():
                             # [0, 0, 1, -1, 0, 0]])
     
     test = RoboticFinger(link_lengths, joint_angles, motor, sf, pullies, tendon_sign, 10)
-    print(test.inverse_kinematics([120, 0, 0]))
+    
+    print(test.forward_kinematics([np.deg2rad(x) for x in [2, 30, 5]]))
 
 if __name__ == "__main__":
     main()
