@@ -85,11 +85,11 @@ class RoboticFinger:
         self.update_state()
 
     def update_state(self):
-        self.T_T = self.estimate_tendon_tension()
-
         self.R = self.tendon_route()
-        self.A = self.D * self.R
-        self.Tau_J = self.joint_torque()
+        self.A = self.R * self.D
+        tau_ref = np.array([0.0, 0.0, 0.0])
+        self.T_T = self.solve_tendon_tensions(tau_ref, 5.0)
+        self.Tau_J = self.A@self.T_T
 
         self.Tmatrix = self.transformation_matrix(self.fingertip_pos)
         self.T_0F = self.Tmatrix[-1]
@@ -116,12 +116,26 @@ class RoboticFinger:
         R3[0, :] = R4[0, :]
         R3[1, :] = R4[1, :]
         R3[2, :] = R4[2, :] + self.coupling_ratio*R4[3, :]
+        print(R3)
         return R3
 
     def tendon_route(self):
         R4 = self.tendon_route_full()
         R3 = self.tendon_route_gen(R4)
         return R3
+    
+    def solve_tendon_tensions(self, tau_ref, preload):
+        A = self.A
+        m = A.shape[1]
+        AAT_inv = np.linalg.inv(A@A.T)
+        T_particular = A.T@(AAT_inv@tau_ref)
+        A_pinv = A.T@AAT_inv
+        H=np.eye(m)-A_pinv@A
+        f0 = np.zeros(m)
+        f0[3] = preload
+        T = T_particular+H@f0
+        T[T<0]=0
+        return T
     
     def within_limits(self, x, min, max):
         return x <= max and x >= min
