@@ -352,12 +352,12 @@ TENDONS = {
     "PIP_flexor_demo": TendonPath(
         name="PIP_flexor_demo",
         contacts=[
-            TendonContact("pulley_Z2", -1),
+            TendonContact("pulley_Z2", +1),
             TendonContact("pulley_02", -1),
             TendonContact("pulley_A2", -1),
             TendonContact("pulley_13", +1),
-            TendonContact("pulley_B1", -1),
-            TendonContact("pulley_23", +1),
+            TendonContact("pulley_B1", +1),
+            TendonContact("pulley_23", -1),
         ]
     )
 }
