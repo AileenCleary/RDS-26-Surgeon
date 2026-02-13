@@ -242,7 +242,7 @@ pulley_11 = PulleyPose(
     name="pulley_11",
     base=pulley_base,
     shaft=joint_1,
-    tendon=3,
+    tendon=1,
     tendon_y_axes=tendon_y_axes,
 )
 pulley_12 = PulleyPose(
