@@ -1,3 +1,4 @@
+from math import dist
 from shaft_analysis import pulley, PulleyPose, TendonContact, TendonPath
 from components import Shaft, BearingBase, Bearing
 
@@ -12,26 +13,57 @@ Explicitly:
 
 Where the splay joint axis is z and the others are y in the global frame.
 """
+#-----------------------------
+
 splay_link_length = 20
 proximal_link_length = 20
 middle_link_length = 20
 distal_link_length = 20
 
+LINK_LENGTHS = [splay_link_length, proximal_link_length, middle_link_length, distal_link_length]
+FINGERTIP_OFFSET = 10
+COUPLING_RATIO = 0.7
+
 # automate this later
 tendon_y_axes = [-4.5,-1.5,0.0,1.5,4.5]
 
+#-----------------------------
+"""IMPOSED CONSTRAINTS: Fill out/add as needed."""
+MIN_BORE_MM = 1.0 # ***
+MIN_DYNAMIC_C_N = 1.0 # ***
+#-----------------------------
+"""BEARING CANDIDATE(S)"""
+BEARING_CANDIDATE = [
+    {
+        "part": "57155K339",
+        "inner_diameter_mm": 1.016,
+        "outer_diameter_mm": 3.175,
+        "width_mm": 1.19,
+        "C_N": 88.96, # *** Fill in from datasheet, needed for deciding (N).
+        "C0_N": 22.24, # Optional static rating.
+
+        # Equivalent load factors
+        "X": 1.0,
+        "Y": 0.0,
+        "p": 3.0,
+        "type": "deep_groove_ball",
+        "notes": "Fill in C/C0 from catalogue.",
+    }, # Add more candidates.
+]
+#-----------------------------
+"""BASE COMPONENTS"""
 bearing_base = BearingBase(
-    inner_diameter=4,
-    outer_diameter=7,
-    shaft_diameter=4,
-    width=3,
+    inner_diameter=1.016,
+    outer_diameter=3.175,
+    shaft_diameter=1.016,
+    width=1.19,
 )
 
 pulley_base = pulley(
     radius=10,
     width=3,
 )
-
+#-----------------------------
 joint_0 = Shaft(
     diameter=10,
     length=25,
@@ -315,7 +347,8 @@ pulley_32 = PulleyPose(
     tendon=2,
     tendon_y_axes=tendon_y_axes,
 )
-
+#-----------------------------
+"""HELPERS"""
 ALL_PULLEYS = {
     p.name: p for p in [
         pulley_Z1, pulley_Z2, pulley_Z3, pulley_Z4,
@@ -336,6 +369,17 @@ BEARINGS_BY_SHAFT = {
     "PIP": (bearing_20, bearing_21, joint_2),
     "C": (bearing_C0, bearing_C1, joint_C),
     "DIP": (bearing_30, bearing_31, joint_3),
+}
+
+SHAFTS = {
+    "joint_Z": joint_Z,
+    "joint_0": joint_0,
+    "joint_A": joint_A,
+    "joint_1": joint_1,
+    "joint_B": joint_B,
+    "joint_2": joint_2,
+    "joint_C": joint_C,
+    "joint_3": joint_3,
 }
 
 # *** Clarify tendon signs and all tendons.
@@ -361,3 +405,15 @@ TENDONS = {
         ]
     )
 }
+
+TENDON_ORDER = [
+    "SPLAY_A",
+    "MCP_extensor_demo",
+    "DIP_extensor",
+    "INTERNAL",
+    "PIP_flexor_demo",
+    "MCP_flexor",
+    "SPLAY_B",
+]
+
+TENDON_INDEX = {name:i for i,name in enumerate(TENDON_ORDER)}

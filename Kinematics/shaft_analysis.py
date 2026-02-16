@@ -241,9 +241,9 @@ def compute_tendon_pulley_loads(
         mu = float(mu_new) if mu_new is not None else float(p_cur.mu)
         ratio = capstan_ratio(mu, wrap) if fm != "none" else 1.0
 
-        if friction_mode == "none":
+        if fm == "none":
             T_out = T_in
-        elif friction_mode == "decay":
+        elif fm == "decay":
             T_out = T_in/ratio
         else:
             T_out = T_in*ratio
