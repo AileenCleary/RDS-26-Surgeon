@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import enum
 from typing import Dict, Sequence, Iterable, Tuple, Union, List
 
-import numpy as np # pyright: ignore[reportMissingImports]
-from scipy.optimize import nnls # type: ignore
+import numpy as np 
+from scipy.optimize import nnls 
 
 from components import Pulley
 from tendon_types import TendonContact, TendonPath

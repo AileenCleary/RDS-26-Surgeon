@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np # type: ignore
+import numpy as np 
 
 from components import Shaft, ShaftBase, BearingBase, Bearing, PulleyBase, Pulley, MotorDrum
 from tendon_types import TendonContact, TendonEndpoint, TendonPath
@@ -92,56 +92,56 @@ def make_shaft(
 joint_Z = make_shaft(
     base_key="shaft_base_vertical",
     name="joint_Z",
-    center=[-(splay_link_length),0.0,0.0],
+    center=np.asarray([-(splay_link_length),0.0,0.0]),
     dof_row=None,
     alias="splay idler"
 )
 joint_0 = make_shaft(
     base_key="shaft_base_vertical",
     name="joint_0",
-    center=[0.0,0.0,0.0],
+    center=np.asarray([0.0,0.0,0.0]),
     dof_row = 0,
     alias="splay"
 )
 joint_A = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_A",
-    center=[(splay_link_length/2),0.0,0.0],
+    center=np.asarray([(splay_link_length/2),0.0,0.0]),
     dof_row = None,
     alias="MCP idler"
 )
 joint_1 = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_1",
-    center=[splay_link_length,0.0,0.0],
+    center=np.asarray([splay_link_length,0.0,0.0]),
     dof_row = 1,
     alias="MCP"
 )
 joint_B = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_B",
-    center=[joint_1.center[0]+proximal_link_length/2,0.0,0.0],
+    center=np.asarray([joint_1.center[0]+proximal_link_length/2,0.0,0.0]),
     dof_row=None,
     alias="PIP Idler"
 )
 joint_2 = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_2",
-    center=[joint_1.center[0]+proximal_link_length,0.0,0.0],
+    center=np.asarray([joint_1.center[0]+proximal_link_length,0.0,0.0]),
     dof_row = 2,
     alias="PIP"
 )
 joint_C = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_C",
-    center=[joint_2.center[0]+middle_link_length/2,0.0,0.0],
+    center=np.asarray([joint_2.center[0]+middle_link_length/2,0.0,0.0]),
     dof_row=None,
     alias="DIP Idler"
 )
 joint_3 = make_shaft(
     base_key="shaft_base_horizontal",
     name="joint_3",
-    center=[joint_2.center[0]+middle_link_length,0.0,0.0],
+    center=np.asarray([joint_2.center[0]+middle_link_length,0.0,0.0]),
     dof_row = 3,
     alias="DIP"
 )
@@ -625,7 +625,7 @@ def ep_from_drum(
 
 mcp_extensor_mid = ep_from_pulley_offset(
     pulley=pulley_01,
-    offset=([pulley_01.radius,-pulley_01.radius,0.0]),
+    offset=np.asarray([pulley_01.radius,-pulley_01.radius,0.0]),
     kind="mid",
     tendon_index=TENDON_INDEX["MCP_EXT"],
     tendon_name="MCP_EXT",

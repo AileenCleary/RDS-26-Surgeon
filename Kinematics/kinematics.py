@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Tuple, Literal
 
-import numpy as np # pyright: ignore[reportMissingImports]
+import numpy as np 
 
 @dataclass(frozen=True)
 class TipPose:
