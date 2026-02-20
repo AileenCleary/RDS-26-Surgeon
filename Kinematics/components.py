@@ -151,8 +151,8 @@ class Pulley(PulleyBase):
     def _clear_runtime(self) -> None:
         self.force_xyz[:] = 0.0
         self.tendon_forces.clear()
-        self.tangent_points_by_tendon.clear()
-        self.wrap_angle_by_tendon.clear()
+        # self.tangent_points_by_tendon.clear()
+        # self.wrap_angle_by_tendon.clear()
 
     def _add_force(
             self,

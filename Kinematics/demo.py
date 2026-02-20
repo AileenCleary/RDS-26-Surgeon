@@ -140,7 +140,7 @@ def analyze_tip_force(
 
 if __name__ == "__main__":
     q = np.array([0.0, 0.3, 0.5])  # [splay, MCP, PIPgen] rad
-    F_tip = np.array([20.0, 0.0, 0.0])  # N in global frame
+    F_tip = np.array([5.0, 0.0, 0.0])  # N in global frame
 
     analyze_tip_force(
         q=q,
