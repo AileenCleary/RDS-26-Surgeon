@@ -87,7 +87,7 @@ class RoboticFingerKinematics:
             "T_0F": T_0F,
         }
     
-    def frame_origin(
+    def frame_origins(
             self,
             q: np.ndarray,
             *,
