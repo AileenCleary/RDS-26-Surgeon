@@ -1,53 +1,74 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import enum
-from typing import Dict, Sequence, Iterable, Tuple, Union, List
+from typing import Dict, Sequence, Tuple, Literal
 
 import numpy as np 
 from scipy.optimize import nnls 
 
 from components import Pulley
-from tendon_types import TendonContact, TendonPath
+from tendon_types import TendonPath
+from kinematics import RoboticFingerKinematics
+from update_tendon_kinematics import update_config_geometry
+from tendon_length import tendon_lengths_all
 
 @dataclass(frozen=True)
 class TransmissionModel:
-    R: np.ndarray
     D: np.ndarray
-    A: np.ndarray
 class TendonTransmission:
     """ 
     """
     def __init__(
             self, 
+            *,
+            cfg,
+            kin: RoboticFingerKinematics,
             pulleys: Dict[str, Pulley], 
             tendons: Dict[str, TendonPath],
             tendon_order: Sequence[str],
-            D: np.ndarray, 
-            *,
             dof_count: int,
-            coupling_ratio: float | None = None,
-            dip_row: int | None = None,
-            pip_row: int | None = None,
-            pipgen_row: int | None = None,
+            dof_mode: Literal["3", "4"] = "3",
+            eps: float = 1e-4,
     ) -> None:
+        self.cfg = cfg
+        self.kin = kin
         self.pulleys = pulleys
         self.tendons = tendons
         self.tendon_order = list(tendon_order)
-        self.coupling_ratio = coupling_ratio
-
-        self.D = np.asarray(D, dtype=float)
-        if self.D.shape != (dof_count, len(self.tendon_order)):
-            raise ValueError("")
-
         self.dof_count = int(dof_count)
-        self.pip_row = pip_row
-        self.dip_row = dip_row
-        self.pipgen_row = pipgen_row
+        self.dof_mode = dof_mode
+        self.eps = float(eps)
+
+        self.model = TransmissionModel(
+            D=np.zeros((self.dof_count, len(self.tendon_order)), dtype=float)
+        )
+
+    def lengths(self,
+                q: np.ndarray
+    ) -> np.ndarray:
+        update_config_geometry(cfg=self.cfg, kin=self.kin, q=q, dof_mode=self.dof_mode)  # type: ignore[arg-type]
+        return tendon_lengths_all(self.tendons, self.pulleys, self.tendon_order)
+    
+    def compute_D(
+            self,
+            q: np.ndarray
+    ) -> np.ndarray:
+        q = np.asarray(q, dtype=float).reshape(-1)
+        if q.shape[0] != self.dof_count:
+            raise ValueError("")
         
-        R = self._build_R_from_paths()
-        A = self.D * R
-        self.model = TransmissionModel(R=R, D=self.D, A=A)
+        D = np.zeros((self.dof_count, len(self.tendon_order)), dtype=float)
+        for j in range(self.dof_count):
+            dq = np.zeros_like(q)
+            dq[j] = self.eps
+            Lp = self.lengths(q + dq)
+            Lm = self.lengths(q - dq)
+            D[j, :] = (Lp - Lm) / (2.0*self.eps)
+
+            update_config_geometry(cfg=self.cfg, kin=self.kin, q=q, dof_mode=self.dof_mode) # type: ignore[arg-type]
+            self.model = TransmissionModel(D=D)
+            return D
+
 
     def _build_R_from_paths(self) -> np.ndarray:
         """
@@ -199,15 +220,15 @@ class TendonTransmission:
             T: np.ndarray,
     ) -> np.ndarray:
         """ Compute tau = A @ T. """
-        T = np.asarray(T, dtype=float).reshape(-1)
-        return self.model.A @ T
+        T = np.asarray(T, float).reshape(-1)
+        return self.model.D @ T
     
     def tendon_length_rates_from_qdot(
             self, 
             qdot: np.ndarray,
     ) -> np.ndarray:
-        qdot = np.asarray(qdot, dtype=float).reshape(-1)
-        return -(self.model.A.T @ qdot)
+        qdot = np.asarray(qdot, float).reshape(-1)
+        return self.model.D.T @ qdot
 
     def solve_tensions(
             self, 
@@ -228,13 +249,14 @@ class TendonTransmission:
         if tau.shape[0] != self.dof_count:
             raise ValueError("")
         
+        A = self.model.D
         if alpha <= 0.0:
-            T, _ = nnls(self.model.A, tau)
+            T, _ = nnls(A, tau)
         else:
-            m = self.model.A.shape[1]
-            A_aug = np.vstack([self.model.A, np.sqrt(float(alpha)) * np.eye(m)])
+            m = A.shape[1]
+            A_aug = np.vstack([A, np.sqrt(float(alpha)) * np.eye(m)])
             b_aug = np.concatenate([tau, np.zeros(m)])
             T, _ = nnls(A_aug, b_aug)
         
-        torque_err = float(np.linalg.norm(self.model.A @ T - tau))
+        torque_err = float(np.linalg.norm(A @ T - tau))
         return T, torque_err

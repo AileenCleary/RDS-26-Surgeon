@@ -519,12 +519,13 @@ ALL_PULLEYS = {
 }
 
 DRUM_AXIS = np.array([0.0, 1.0, 0.0], dtype=float)
+SPLAY_DRUM_AXIS = np.array([0.0, 0.0, 1.0], dtype=float)
 
 drum_SPLAY_A = MotorDrum(
     name="drum_SPLAY_A",
     radius=6.0,
     center=pulley_ZA.center + np.array([-40.0, -pulley_ZA.radius, 0.0]),
-    axis=DRUM_AXIS,
+    axis=SPLAY_DRUM_AXIS,
     tendon_name="SPLAY_A",
     direction=+1.0,
 )
@@ -532,7 +533,7 @@ drum_SPLAY_B = MotorDrum(
     name="drum_SPLAY_B",
     radius=6.0,
     center=pulley_ZB.center + np.array([-40.0, pulley_ZB.radius, 0.0]),
-    axis=DRUM_AXIS,
+    axis=SPLAY_DRUM_AXIS,
     tendon_name="SPLAY_B",
     direction=-1.0,
 )
