@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import numpy as np  # type: ignore
+import numpy as np 
 
 import config as cfg
 from kinematics import RoboticFingerKinematics
 from transmission import TendonTransmission
+
 from select_bearings import (
     Scenario,
-    loads_by_shaft,
-    compute_reactions_for_shaft,
-    evaluate_bearing_for_scenario,
-    _bearing_choice_from_dict,
+    apply_scenario_loads,
+    evaluate_scenario,
     summarize_results,
+    compute_reactions_for_shaft,
+    pulleys_by_shaft,
 )
 
 
@@ -22,7 +23,7 @@ def analyze_tip_force(
     q: np.ndarray,
     F_tip_xyz_N: np.ndarray,
     mu: float = 0.05,
-    friction_mode: str = "decay",
+    friction_mode: str = "none",
     alpha: float = 1e-6,
     load_sf: float = 1.5,
     verbose: bool = True,
@@ -36,31 +37,35 @@ def analyze_tip_force(
 
     # --- Kinematics (tau in N*mm)
     kin = RoboticFingerKinematics(cfg.LINK_LENGTHS, cfg.FINGERTIP_OFFSET, cfg.COUPLING_RATIO)
-    tau_ref = kin.joint_torque_from_tip_force_xyz(q, F_tip_xyz_N)
+    if q.shape[0] != 3:
+        raise ValueError("")
+    
+    tau_ref = np.asarray(kin.joint_torque_from_tip_force_xyz(q, F_tip_xyz_N), float).reshape(-1)
 
     tendon_order = cfg.TENDON_ORDER
-
-    dof_count = int(np.asarray(cfg.D_main, float).shape[0])
+    dof_count = 3
 
     trans = TendonTransmission(
+        cfg=cfg,
+        kin=kin,
         pulleys=cfg.ALL_PULLEYS,
         tendons=cfg.TENDONS,
-        tendon_order=cfg.TENDON_ORDER,
-        D=np.ones((3, 5), dtype=float),
-        dof_count=3,
-        coupling_ratio=cfg.COUPLING_RATIO,
-        pip_row=2,
-        dip_row=3,
-        pipgen_row=2,
+        tendon_order=tendon_order,
+        dof_count=dof_count,
+        dof_mode="3",
+        eps=1e-4,
     )
 
-    print("A=\n", trans.model.A)
-    print("tau_ref=", tau_ref)
+    D = trans.compute_D(q)
 
-
-
+    if verbose:
+        print("\n=== Transmission ===")
+        print("D = dL/dq shape:", D.shape)
+        print(D)
+        print("tau_ref (N*mm):", tau_ref)
+    
     T_full, err = trans.solve_tensions(tau_ref, alpha=alpha)
-
+    T_full = np.asarray(T_full, float).reshape(-1)
     T_by_name = {name: float(T_full[i]) for i, name in enumerate(tendon_order)}
 
     if verbose:
@@ -86,60 +91,56 @@ def analyze_tip_force(
         load_sf=load_sf,
     )
 
-    shaft_loads = loads_by_shaft(sc)
+    apply_scenario_loads(sc)
+    shaft_to_pulleys = pulleys_by_shaft()
 
     if verbose:
-        print("\n=== Shaft loads summary ===")
-        for shaft_key, loads in shaft_loads.items():
-            total = np.zeros(3)
-            for L in loads:
-                total += np.asarray(L.force_xyz, float).reshape(3)
-            alias = cfg.BEARINGS_BY_SHAFT[shaft_key][2].alias
-            print(f"    {shaft_key} (alias='{alias}') : {len(loads)} pulley loads, sumF={total}")
-
-    if verbose:
-        print("\n=== Bearing reactions (per shaft) ===")
-
+        print("\n=== Bearing Reactions per Shaft ===")
+    
     for shaft_key, (bL, bR, shaft) in cfg.BEARINGS_BY_SHAFT.items():
-        loads = shaft_loads.get(shaft_key, [])
-        if not loads:
+        loads = shaft_to_pulleys.get(shaft_key, [])
+        loads_nz = [p for p in loads if float(np.linalg.norm(np.asarray(getattr(p, "force_xyz", 0.0)))) > 1e-12]
+        if not loads_nz:
             continue
 
         R1, R2 = compute_reactions_for_shaft(
-            loads,
+            loads_nz,
             np.asarray(bL.center, float),
             np.asarray(bR.center, float),
             np.asarray(shaft.axis, float),
         )
 
+        R1 = load_sf * np.asarray(R1, float).reshape(3)
+        R2 = load_sf * np.asarray(R2, float).reshape(3)
+
         if verbose:
             print(f"\n[{shaft_key}] shaft alias='{shaft.alias}'")
-            print(f"  Left bearing  reaction R1 (N): {R1}")
-            print(f"  Right bearing reaction R2 (N): {R2}")
+            print(f"    Left bearing reaction R1 (N): {R1}")
+            print(f"    Right bearing reaction R2 (N): {R2}")
 
-    candidates_cfg = getattr(cfg, "BEARING_CANDIDATE", [])
-    if candidates_cfg:
-        candidates = [_bearing_choice_from_dict(d) for d in candidates_cfg]
-        if verbose:
-            print("\n=== Bearing candidate evaluation ===")
-        for c in candidates:
-            res = evaluate_bearing_for_scenario(sc, c)
-            maxP, minL10 = summarize_results(res)
-            life_str = "N/A" if np.isnan(minL10) else f"{minL10:.3e} rev"
-            if verbose:
-                print(f"  {c.part}: worst P={maxP:.3f} N, worst L10={life_str}")
+    results = evaluate_scenario(sc)
+    maxP, minL10 = summarize_results(results)
+        
+    if verbose:
+        print("\n=== Bearing base evaluation ===")
+        print(f"    worse-case P: {maxP:.3f} N")
+        if np.isnan(minL10):
+            print(" worse-case L10: N/A (C not set)")
+        else:
+            print(f"    worst-case L10: {minL10:.3e} rev")
 
     return {
+        "D_dL_dq": D,
         "tau_ref_Nmm": tau_ref,
-        "tendon_tensions_full_N": T_by_name,
+        "tendon_tensions_N": T_by_name,
         "scenario": sc,
-        "shaft_loads": shaft_loads,
+        "bearing_results": results,
     }
 
 
 if __name__ == "__main__":
     q = np.array([0.0, 0.3, 0.5])  # [splay, MCP, PIPgen] rad
-    F_tip = np.array([5.0, 0.0, 0.0])  # N in global frame
+    F_tip = np.array([20.0, 0.0, 0.0])  # N in global frame
 
     analyze_tip_force(
         q=q,

@@ -43,8 +43,8 @@ BEARING_BASES: Dict[str, BearingBase] = {
         X=1.0,
         Y=0.0,
         p=3.0,
-        C=0.0,
-        C0=0.0, # Fill in the load ratings.
+        C=70.0,
+        C0=30.0, # Fill in the load ratings.
     ),
 }
 
@@ -822,7 +822,7 @@ TENDONS = {
 }
 
 D_main = np.array([
-    [+1.0, 1.0, 1.0, 1.0, 1.0, 1.0, +1.0],   # splay 
+    [+1.0, 1.0, 1.0, 0.0, 1.0, 1.0, +1.0],   # splay 
     [0.0, +1.0, +1.0, 0.0, +1.0, +1.0, 0.0],   # MCP
     [0.0, 0.0, +1.0, +1.0, +1.0, 0.0, 0.0],    # PIPgen
 ])

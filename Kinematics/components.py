@@ -81,17 +81,17 @@ class Bearing(BearingBase):
                 side: int,
                 alias : Optional[str] = None,
                 ):
-    
+        self.base = base
         super().__init__(
-            base.inner_diameter,
-            base.outer_diameter,
-            base.shaft_diameter,
-            base.width,
-            base.X,
-            base.Y,
-            base.p,
-            base.C,
-            base.C0
+            inner_diameter=base.inner_diameter,
+            outer_diameter=base.outer_diameter,
+            shaft_diameter=base.shaft_diameter,
+            width=base.width,
+            X=base.X,
+            Y=base.Y,
+            p=base.p,
+            C=base.C,
+            C0=base.C0
         )
         self.shaft = shaft
         self.alias = alias
@@ -139,20 +139,20 @@ class Pulley(PulleyBase):
 
         self.axis = _unit(self.shaft.axis)
         self.center = self.shaft.center + lane*self.axis
-        self.tangent_points = list(tangent_points) if tangent_points is not None else []
+        # self.tangent_points = list(tangent_points) if tangent_points is not None else []
+        # self.wrap_angle = 0.0
+        self.tangent_points_by_tendon: Dict[str, List[np.ndarray]] = {}
+        self.wrap_angle_by_tendon: Dict[str, float] = {}
 
-
-        self.wrap_angle = 0.0
         self.tendon_forces = []
         self.force_xyz = np.zeros(3)
         self.s_mm = 0.0
 
     def _clear_runtime(self) -> None:
-        """Clear per-run results, i.e., wrap/tangent points/forces."""
-        self.tangent_points.clear()
-        self.wrap_angle = 0.0
         self.force_xyz[:] = 0.0
         self.tendon_forces.clear()
+        self.tangent_points_by_tendon.clear()
+        self.wrap_angle_by_tendon.clear()
 
     def _add_force(
             self,

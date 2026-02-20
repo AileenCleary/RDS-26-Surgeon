@@ -174,13 +174,14 @@ def _wrap_angle_about_axis(
     u = _unit(v_in)
     v = _unit(v_out)
     s = float(np.dot(a, np.cross(u, v)))
-    c = float(np.dot(u, v))
+    c = float(np.clip(np.dot(u,v), -1.0, 1.0))
 
-    ccw = float(np.arctan2(s, c))
-    if ccw <= 0.0:
-        ccw += TAU
-    
-    return ccw if side >= 0 else (TAU - ccw)
+    ang = float(np.atan2(s, c))
+    if ang < 0.0:
+        ang += TAU
+
+    return ang
+    #return ang if side >= 0 else (TAU - ang)
     
 def calculate_all_wrap_angles(
         tendons: Dict[str, TendonPath], 
@@ -196,6 +197,7 @@ def calculate_all_wrap_angles(
 
     for tendon_path in tendons.values():
         contacts = list(tendon_path.contacts)
+        tname = tendon_path.name
         if len(contacts) < 3:
             continue
 
@@ -217,11 +219,12 @@ def calculate_all_wrap_angles(
 
             elif isinstance(prev, TendonContact):
                 p_prev = pulleys[prev.pulley_name]
-                if len(p_prev.tangent_points) < 2:
+                tp_prev = p_prev.tangent_points_by_tendon.get(tname)
+                if tp_prev is None or len(tp_prev) < 2:
                     raise ValueError(f"{p_prev.name}: missing tangent points.")
                 if not _axis_equal(p_prev.axis, p_cur.axis):
                     raise ValueError("Change of axes between pulleys not supported.")  
-                ref_tan1 = p_prev.tangent_points[1]
+                ref_tan1 = tp_prev[1]
                 _, tan_in = find_tangent_two_circles(p_prev, p_cur, side_cur, ref_tan1)
     
             else:
@@ -240,9 +243,15 @@ def calculate_all_wrap_angles(
             
             else:
                 raise ValueError("Invalid element type.")
+
+            if isinstance(prev, TendonEndpoint):
+                tan_in = find_tangent_from_point(prev.coordinates, p_cur, side_cur)
             
-            p_cur.tangent_points = [tan_in, tan_out]
-            p_cur.wrap_angle = _wrap_angle_about_axis(
+            if isinstance(nxt, TendonEndpoint):
+                tan_out = find_tangent_from_point(nxt.coordinates, p_cur, side_cur)
+            
+            p_cur.tangent_points_by_tendon[tname] = [tan_in, tan_out]
+            p_cur.wrap_angle_by_tendon[tname] = _wrap_angle_about_axis(
                 tan_in - p_cur.center,
                 tan_out - p_cur.center,
                 p_cur.axis,
@@ -283,12 +292,13 @@ def compute_all_pulley_loads_endpoint_path(
         if isinstance(elem, TendonEndpoint):
             return np.asarray(elem.coordinates, float).reshape(3)
         p = pulleys[elem.pulley_name]
-        if len(p.tangent_points) < 2:
+        tp = p.tangent_points_by_tendon.get(tendon.name)
+        if tp is None or len(tp) < 2:
             raise RuntimeError(
                 f"{p.name}: tangent_points not initialized. "
                 "calculate_all_wrap_angles() did not process this contact."
             )
-        return p.tangent_points[0] if incoming else p.tangent_points[1]
+        return tp[0] if incoming else tp[1]
 
         
     touched: List[Pulley] = []
@@ -304,7 +314,7 @@ def compute_all_pulley_loads_endpoint_path(
         p_cur = pulleys[cur.pulley_name]
 
         mu = float(mu_new) if mu_new is not None else float(getattr(p_cur, "mu", 0.0))
-        wrap = float(getattr(p_cur, "wrap_angle", 0.0))
+        wrap = float(p_cur.wrap_angle_by_tendon.get(tendon.name, 0.0))
         
         ratio = _capstan_ratio(mu, wrap) if fm != "none" else 1.0
         if fm == "none":
@@ -317,7 +327,10 @@ def compute_all_pulley_loads_endpoint_path(
         prev_point = point_for(prev, incoming=False)
         next_point = point_for(nxt, incoming=True)
 
-        tan_in, tan_out = p_cur.tangent_points[0], p_cur.tangent_points[1]
+        tp = p_cur.tangent_points_by_tendon.get(tendon.name)
+        if tp is None or len(tp) < 2:
+            raise ValueError("")
+        tan_in, tan_out = tp[0], tp[1]
 
         t_in = _unit(prev_point - tan_in)
         t_out = _unit(next_point - tan_out)
@@ -335,151 +348,6 @@ def compute_all_pulley_loads_endpoint_path(
 # ---------------------------------------------------------
 # LEGACY: Vector/path wrap & tangent-direction force.
 # ---------------------------------------------------------
-
-def wrap_angle_from_path(
-        c_prev : np.ndarray,
-        c_cur : np.ndarray, 
-        c_next : np.ndarray,
-) -> float:
-    """Wrap angle approximation as deflection angle of centerline path between pulleys."""
-    u_in = _unit(np.asarray(c_prev, dtype=float) - np.asarray(c_cur, dtype=float))
-    u_out = _unit(np.asarray(c_next, dtype=float) - np.asarray(c_cur, dtype=float))
-    return _angle(u_in, u_out)
-
-def tan_dir_at_pulley( # ***
-        c_cur : np.ndarray,
-        c_other : np.ndarray,
-        v_hat : np.ndarray,
-        r_cur : float,
-        side : int,
-) -> np.ndarray:
-    """Tangent direction from current to neighboring pulley in plane normal to joint axis."""
-    c_cur = np.asarray(c_cur, dtype=float).reshape(3)
-    c_other = np.asarray(c_other, dtype=float).reshape(3)
-
-    _, _, e3 = _orthonormal(v_hat)
-    v = c_other - c_cur
-
-    v_plane = v - float(np.dot(v, e3)) * e3
-    d = float(np.linalg.norm(v_plane))
-    if d <= 1e-12:
-        raise ValueError("Pulley neighbor direction undefined.")
-   
-    u = v_plane/d
-    
-    r = float(r_cur) 
-    if r <= 0.0 or d <= r:
-        return _unit(v_plane)
-    
-    alpha = float(np.arcsin(np.clip(r/d, 0.0, 1.0)))
-    u_perp = np.cross(e3, u)
-    u_tan = np.cos(alpha)*u + side*np.sin(alpha)*u_perp
-    return _unit(u_tan)
-
-def wrap_angle_from_tangents( # ***
-        c_prev : np.ndarray,
-        p_cur : Pulley,
-        c_next : np.ndarray,
-        side_in : int,
-        side_out : int,
-) -> float:
-    """Wrap angle calculated as angle between incoming and outgoing tangents at pulley."""
-
-    t_in = tan_dir_at_pulley(p_cur.center, c_prev, p_cur.axis, p_cur.radius, side_in)
-    t_out = tan_dir_at_pulley(p_cur.center, c_next, p_cur.axis, p_cur.radius, side_out)
-    return _angle(t_in, t_out)
-
-def pulley_force_vector( # ***
-        c_prev : np.ndarray,
-        c_cur : np.ndarray, 
-        c_next : np.ndarray,
-        T_in : float,
-        T_out : float,
-        ) -> np.ndarray:
-    """Net force on a pulley from incoming/outgoing tendon segment tensions."""
-   
-    u_in = _unit(np.asarray(c_prev) - np.asarray(c_cur))
-    u_out = _unit(np.asarray(c_next) - np.asarray(c_cur))
-    return T_in*u_in + T_out*u_out
-
-def force_angle_xy(F_xyz: np.ndarray) -> float: # ***
-    """Angle (rads) of force projection in global XY plane."""
-    
-    F = np.asarray(F_xyz, dtype=float).reshape(3)
-    return float(np.arctan2(F[1], F[0]))
-
-def compute_tendon_pulley_loads( # ***
-        tendon : TendonPath,
-        pulleys : Dict[str, Pulley],
-        T0 : float,
-        *,
-        friction_mode : str = "none",
-        mu_new : Optional[float] = None,  
-        use_tan_wrap : bool = False,
-        use_tan_force : bool = False,     
-) -> Tuple[List[Tuple[Pulley, np.ndarray]], float]:
-    """
-    Compute per pulley forces along tendon path with friction options.
-    
-    Only internal pulleys, excluding endpoints, have a computed load (requires >=3 contacts).
-    friction_mode:
-        - "none" : T_out = T_in (ideal idlers, no friction)
-        - "decay" : T_out = T_in / exp(mu*wrap) (friction loss)
-        - "growth" : T_out = T_in * exp(mu*wrap) (conservative friction loss, worst-case)
-    """ 
-    contacts = list(tendon.contacts)
-    if len(contacts) < 3:
-        return [], float(T0)
-
-
-    if any(not isinstance(c, TendonContact) for c in contacts):
-        raise ValueError("compute_tendon_pulley_loads only accounts for contact-only TendonPath.")
-    
-    fm = friction_mode.lower()
-    if fm not in {"none", "decay", "growth"}:
-        raise ValueError(f"Invalid entry for friction_mode: {fm}.")
-    
-    forces: List[Tuple[Pulley, np.ndarray]] = []
-    T_in = float(T0)
-
-    for i in range(1, len(contacts) - 1):
-        prev = contacts[i - 1]
-        cur = contacts[i]
-        nxt = contacts[i + 1]
-
-        p_prev = pulleys[prev.pulley_name] # type: ignore
-        p_cur = pulleys[cur.pulley_name] # type: ignore
-        p_next = pulleys[nxt.pulley_name] # type: ignore
-
-        side = int(np.sign(cur.sign) or 1) # type: ignore
-
-        wrap = (
-            wrap_angle_from_tangents(p_prev.center, p_cur, p_next.center, side, side)
-            if use_tan_wrap
-            else wrap_angle_from_path(p_prev.center, p_cur.center, p_next.center)
-        )
-
-        mu = float(mu_new) if mu_new is not None else float(getattr(p_cur, "mu", 0.0))
-        ratio = _capstan_ratio(mu, wrap) if fm != "none" else 1.0
-
-        if fm == "none":
-            T_out = T_in
-        elif fm == "decay":
-            T_out = T_in/ratio
-        else:
-            T_out = T_in*ratio
-
-        if use_tan_force:
-            t_in = tan_dir_at_pulley(p_cur.center, p_prev.center, p_cur.axis, p_cur.radius, side)
-            t_out = tan_dir_at_pulley(p_cur.center, p_next.center, p_cur.axis, p_cur.radius, side)
-            F_xyz = T_in*t_in + T_out*t_out
-        else:
-            F_xyz = pulley_force_vector(p_prev.center, p_cur.center, p_next.center, T_in, T_out)
-        
-        forces.append((p_cur, F_xyz))
-        T_in = T_out
-
-    return forces, float(T_in)
 
 # ---------------------------------------------------------
 # Statics & bearing selection functions.
@@ -587,36 +455,3 @@ class ShaftAnalysis:
         
         return R1_xyz, R2_xyz, L_b
 
-def going_insane(
-    tendon: TendonPath,
-    pulleys: Dict[str, Pulley],
-    *,
-    T0: float = 50.0,
-    mu: float = 0.05,
-    friction_mode: str = "decay",
-    use_tan_wrap: bool = True,
-    use_tan_force: bool = True,
-) -> None:
-    """Try and check my work so far somewhat."""
-
-    for p in pulleys.values():
-        p.mu = mu
-
-    forces, T_end = compute_tendon_pulley_loads(
-        tendon, pulleys, T0,
-        friction_mode=friction_mode,
-        mu_new=mu,
-        use_tan_wrap=use_tan_wrap,
-        use_tan_force=use_tan_force
-    )
-
-    print(f"\nTendon: {tendon.name}")
-    print(f"    contacts: {len(tendon.contacts)} (>=3 for internal loads.)")
-    print(f"    T0={T0:.2f} N -> Tend={T_end:.2f} N (mode={friction_mode}, mu={mu:.3f})")
-
-    for p, F in forces:
-        mag = float(np.linalg.norm(F))
-        ang_xy = np.degrees(np.arctan2(F[1], F[0]))
-        ang_xz = np.degrees(np.arctan2(F[2], F[0]))
-        print(f"\n{p.name:10s} \ncenter={p.center} |F|={mag:8.2f} N") 
-        print(f"angle_xy={ang_xy:8.2f} degrees, angle_xz={ang_xz:8.2f} degrees.")
