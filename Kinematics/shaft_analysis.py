@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple, Any, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
-import numpy as np # pyright: ignore[reportMissingImports]
+import numpy as np 
 # *** generate pydantic models .justfile command
 
-from components import Shaft, BearingBase, Bearing, Pulley
-from tendon_types import TendonElem, TendonContact, TendonEndpoint, TendonPath
+from components import BearingBase, Pulley
+from tendon_types import TendonContact, TendonEndpoint, TendonPath
 from utils import _unit, _orthonormal, _axis_equal, _angle, _capstan_ratio
 
 """
@@ -31,6 +30,13 @@ def build_pulley_dict(pulleys: Iterable[Pulley]) -> Dict[str, Pulley]:
 #   - Stores p.tangent_points=[tan_in, tan_out] and p.wrap_angle.
 # ---------------------------------------------------------
 
+def _create_vertical(axis: np.ndarray) -> np.ndarray:
+    a = _unit(axis)
+    v = np.cross(GLOBAL_X, a)
+    if float(np.linalg.norm(v)) <= 1e-12:
+        v = np.cross(np.array([0.0, 1.0, 0.0], dtype=float), a)
+    return _unit(v)
+
 def select_tan_point(
         side: int, 
         p1: np.ndarray, 
@@ -45,8 +51,7 @@ def select_tan_point(
     side=+1 chooses the point with the larger dot(p,vertical).
     side=-1 chooses the point with the smaller dot(p,vertical).
     """
-    axis = _unit(axis)
-    vertical = _unit(np.cross(GLOBAL_X, axis))
+    vertical = _create_vertical(axis)
     
     p1 = np.asarray(p1, dtype=float).reshape(3)
     p2 = np.asarray(p2, dtype=float).reshape(3)
@@ -82,13 +87,12 @@ def find_tangent_from_point(
     t1 = c + a*u + h*u_perp
     t2 = c + a*u - h*u_perp
 
-    t = select_tan_point(
+    return select_tan_point(
         side=side, 
         p1=t1, 
         p2=t2, 
         axis=e3)
-    pulley.tangent_points.append(t)
-    return t
+    
 
 def find_tangent_two_circles(
         pulley1: Pulley, 
@@ -110,8 +114,7 @@ def find_tangent_two_circles(
     
     axis = _unit(pulley2.axis)
     e1, e2, e3 = _orthonormal(axis)
-
-    vertical = _unit(np.cross(GLOBAL_X, axis))
+    vertical = _create_vertical(axis)
     
     c1 = np.asarray(pulley1.center, dtype=float).reshape(3)
     c2 = np.asarray(pulley2.center, dtype=float).reshape(3)
@@ -119,7 +122,7 @@ def find_tangent_two_circles(
     r2 = float(pulley2.radius)
 
     ref_tan1 = np.asarray(ref_tan1, dtype=float).reshape(3)
-    sign1 = 1 if float(ref_tan1 @ vertical) > float(c1 @ vertical) else -1
+    branch1_ref = 1 if float(ref_tan1 @ vertical) > float(c1 @ vertical) else -1
 
     u = c2 - c1
     u2 = np.array([float(u @ e1), float(u @ e2)], dtype=float)
@@ -139,15 +142,15 @@ def find_tangent_two_circles(
         for t in (+1.0, -1.0):
             d3 = e1*u2[0] + e2*u2[1]
             perp3 = np.cross(e3, d3)
-            perp2 = np.array([float(perp3 @ e1), float(perp3 @ e2)])
+            perp2 = np.array([float(perp3 @ e1), float(perp3 @ e2)], dtype=float)
 
             v = (u2*dr + perp2*(h*t)) / D
             p1 = c1 + (e1*v[0] + e2*v[1])*r1
             p2 = c2 + (e1*v[0] + e2*v[1])*(s*r2)
 
-            sign2 = 1 if float(p1 @ vertical) > float(c1 @ vertical) else -1
-            sign3 = 1 if float(p2 @ vertical) > float(c2 @ vertical) else -1
-            if (sign1 == sign2) and (sign3 == int(np.sign(side2) or 1)):
+            branch1 = 1 if float(p1 @ vertical) > float(c1 @ vertical) else -1
+            branch2 = 1 if float(p2 @ vertical) > float(c2 @ vertical) else -1
+            if (branch1 == branch1_ref) and (branch2 == int(np.sign(side2) or 1)):
                 tan_points.append((p1, p2))
 
     if not tan_points:
@@ -181,13 +184,15 @@ def _wrap_angle_about_axis(
     
 def calculate_all_wrap_angles(
         tendons: Dict[str, TendonPath], 
-        pulleys: Dict[str, Pulley]
+        pulleys: Dict[str, Pulley],
+        *,
+        ignore_roles: Optional[set[str]] = None,
 ) -> None:
     """Populate all pulley tangent points and wrap angles for endpoint-style tendon paths."""
+    ignore_roles = ignore_roles or set()
+
     for p in pulleys.values():
         p._clear_runtime()
-    # for name, tendon in tendons.items():
-    #     print(name, [type(c).__name__ for c in tendon.contacts])
 
     for tendon_path in tendons.values():
         contacts = list(tendon_path.contacts)
@@ -199,12 +204,13 @@ def calculate_all_wrap_angles(
             if not isinstance(cur, TendonContact):
                 continue
 
+            p_cur = pulleys[cur.pulley_name]
+            if getattr(p_cur, "role", "") in ignore_roles:
+                continue
+
             prev = contacts[i - 1]
             nxt = contacts[i + 1]
-            p_cur = pulleys[cur.pulley_name]
             side_cur = int(np.sign(cur.sign) or 1)
-
-            p_cur.tangent_points = []
 
             if isinstance(prev, TendonEndpoint):
                 tan_in = find_tangent_from_point(prev.coordinates, p_cur, side_cur)
@@ -222,7 +228,6 @@ def calculate_all_wrap_angles(
                 raise ValueError("Invalid element type.")
 
             if isinstance(nxt, TendonEndpoint):
-                p_cur.tangent_points = [tan_in]
                 tan_out = find_tangent_from_point(nxt.coordinates, p_cur, side_cur)
 
             elif isinstance(nxt, TendonContact):
@@ -253,7 +258,7 @@ def compute_all_pulley_loads_endpoint_path(
         pulleys: Dict[str, Pulley], 
         T0: float, 
         *, 
-        friction_mode: str = "decay", 
+        friction_mode: str = "none", 
         mu_new: Optional[float] = None,
 ) -> Tuple[List[Pulley], float]:
     """Compute pulley forces for endpoint-style tendon paths where tangent points were precomputed.
@@ -273,7 +278,7 @@ def compute_all_pulley_loads_endpoint_path(
     def point_for(
             elem: Union[TendonEndpoint, TendonContact], 
             *, 
-            use_incoming: bool,
+            incoming: bool,
     ) -> np.ndarray:
         if isinstance(elem, TendonEndpoint):
             return np.asarray(elem.coordinates, float).reshape(3)
@@ -283,7 +288,7 @@ def compute_all_pulley_loads_endpoint_path(
                 f"{p.name}: tangent_points not initialized. "
                 "calculate_all_wrap_angles() did not process this contact."
             )
-        return p.tangent_points[0] if use_incoming else p.tangent_points[1]
+        return p.tangent_points[0] if incoming else p.tangent_points[1]
 
         
     touched: List[Pulley] = []
@@ -299,7 +304,7 @@ def compute_all_pulley_loads_endpoint_path(
         p_cur = pulleys[cur.pulley_name]
 
         mu = float(mu_new) if mu_new is not None else float(getattr(p_cur, "mu", 0.0))
-        wrap = float(p_cur.wrap_angle)
+        wrap = float(getattr(p_cur, "wrap_angle", 0.0))
         
         ratio = _capstan_ratio(mu, wrap) if fm != "none" else 1.0
         if fm == "none":
@@ -309,10 +314,11 @@ def compute_all_pulley_loads_endpoint_path(
         else:
             T_out = T_in*ratio
         
-        prev_point = point_for(prev, use_incoming=False)
-        next_point = point_for(nxt, use_incoming=True)
+        prev_point = point_for(prev, incoming=False)
+        next_point = point_for(nxt, incoming=True)
 
         tan_in, tan_out = p_cur.tangent_points[0], p_cur.tangent_points[1]
+
         t_in = _unit(prev_point - tan_in)
         t_out = _unit(next_point - tan_out)
 
@@ -327,7 +333,7 @@ def compute_all_pulley_loads_endpoint_path(
     return touched, float(T_in)
 
 # ---------------------------------------------------------
-# Vector/path wrap & tangent-direction force.
+# LEGACY: Vector/path wrap & tangent-direction force.
 # ---------------------------------------------------------
 
 def wrap_angle_from_path(
@@ -571,7 +577,7 @@ class ShaftAnalysis:
             f2 = float(np.dot(F, e2))
 
             sumF += np.array([f1, f2])
-            sumFs += np.array([f1*s, f2*s]) # type: ignore
+            sumFs += np.array([f1*s, f2*s]) 
 
         R2_12 = sumFs / L_b
         R1_12 = sumF - R2_12
