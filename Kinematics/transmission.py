@@ -1,83 +1,219 @@
-import numpy as np # pyright: ignore[reportMissingImports]
-from scipy.optimize import nnls
+from __future__ import annotations
 
+from dataclasses import dataclass
+import enum
+from typing import Dict, Sequence, Iterable, Tuple, Union, List
+
+import numpy as np # pyright: ignore[reportMissingImports]
+from scipy.optimize import nnls # type: ignore
+
+from components import Pulley
+from tendon_types import TendonContact, TendonPath
+
+@dataclass(frozen=True)
+class TransmissionModel:
+    R: np.ndarray
+    D: np.ndarray
+    A: np.ndarray
 class TendonTransmission:
-    """ Tendon transmission model for coupled PIP/DIP finger config in generalized coordinates. 
-    
-    Parameters:
-        tau : (3,) generalized joint torques [Splay, MCP, PIPgen] (Nmm).
-        T   : (n_tendons,) tendon tensions (N), where (T >= 0) (positive tensions only).
-        A   : (3, n_tendons) signed moment-arm matrix (mm).
+    """ 
     """
     def __init__(
             self, 
-            pullies, 
-            tendon_sign, 
-            coupling_ratio : float,
-            ) -> None:
-        """
-        Args:
-            pullies : Pulley look-up object.
-            tendon_sign : (3, n_tendons) D matrix.
-            coupling_ratio  : k such that q_DIP = k*q_PIP.
-        """
-        self.P = pullies
-        self.D = np.asarray(tendon_sign, dtype=float)
-        self.k = coupling_ratio
+            pulleys: Dict[str, Pulley], 
+            tendons: Dict[str, TendonPath],
+            tendon_order: Sequence[str],
+            D: np.ndarray, 
+            *,
+            dof_count: int,
+            coupling_ratio: float | None = None,
+            dip_row: int | None = None,
+            pip_row: int | None = None,
+            pipgen_row: int | None = None,
+    ) -> None:
+        self.pulleys = pulleys
+        self.tendons = tendons
+        self.tendon_order = list(tendon_order)
+        self.coupling_ratio = coupling_ratio
 
-        self.R4 = self._tendon_route_full() 
-        self.R = self._tendon_route_generalized(self.R4) 
+        self.D = np.asarray(D, dtype=float)
+        if self.D.shape != (dof_count, len(self.tendon_order)):
+            raise ValueError("")
 
-        self.A = self.D * self.R
-        self.internal_id = 3
+        self.dof_count = int(dof_count)
+        self.pip_row = pip_row
+        self.dip_row = dip_row
+        self.pipgen_row = pipgen_row
+        
+        R = self._build_R_from_paths()
+        A = self.D * R
+        self.model = TransmissionModel(R=R, D=self.D, A=A)
 
-        if self.D.shape != self.R.shape:
-            raise ValueError(f"D shape {self.D.shape} must match R shape {self.R.shape}.")
-
-    def _tendon_route_full(self):
+    def _build_R_from_paths(self) -> np.ndarray:
         """
-        "Full" (non-generalized) routing matrix (4, n_tendons).
-        Rows correspond to joints [splay, MCP, PIP, DIP].
-        Columns correspond to tendons [+splay, MCP extensor, DIP extensor, Internal tendon, PIP flexor, MCP flexor, -splay].
-        Splay is modeled as two virtual tendons for solving purposes since it is N-config.
-        Entries are pulley radii (mm), unsigned.
+        Build an R matrix from tendon paths.
+
+        We first build a 'full' R over the physical shaft rows (max dof_row + 1),
+        then optionally collapse (PIP, DIP) into a generalized PIP row.
         """
-        R4 = np.array([
-                      [self.P.r(0,1), 0,            0,             0,              0,                0, self.P.r(0,1)],
-                      [0,             self.P.r(2,1),self.P.r(2,2), 0,              self.P.r(2,3),    self.P.r(2,4), 0],
-                      [0,             0,            self.P.r(4,1), self.P.r(4,2),  self.P.r(4,3),    0, 0],
-                      [0,             0,            self.P.r(6,1), self.P.r(6,2),  0,                0, 0]], dtype=float)
-        return R4
+        n = len(self.tendon_order)
+
+        # Determine how many physical rows exist from pulley shaft.dof_row
+        dof_rows = [
+            p.shaft.dof_row
+            for p in self.pulleys.values()
+            if p.shaft.dof_row is not None
+        ]
+        physical_rows = (max(dof_rows) + 1) if dof_rows else self.dof_count
+        R_full = np.zeros((physical_rows, n), dtype=float)
+
+        for j, tendon_name in enumerate(self.tendon_order):
+            path = self.tendons[tendon_name]
+
+            for elem in path.contacts:
+                if not isinstance(elem, TendonContact):
+                    continue
+
+                p = self.pulleys[elem.pulley_name]
+                row = p.shaft.dof_row
+                if row is None:
+                    continue
+                if row < 0 or row >= physical_rows:
+                    raise ValueError(f"{p.name}: dof_row={row} out of bounds")
+
+                R_full[row, j] += float(elem.sign)*float(p.radius)
+
+        # If you want a 3-DOF generalized system (Splay, MCP, PIPgen)
+        if (
+            self.dof_count == 3
+            and self.coupling_ratio is not None
+            and self.pip_row is not None
+            and self.dip_row is not None
+            and self.pipgen_row is not None
+        ):
+            return self._generalize_R(R_full)
+
+        # Otherwise, return (or truncate) to requested dof_count
+        if R_full.shape[0] != self.dof_count:
+            if R_full.shape[0] < self.dof_count:
+                raise ValueError("Not enough physical dof rows to fill requested dof_count.")
+            return R_full[: self.dof_count, :]
+        return R_full
+
+
+    def _generalize_R(self, R_full: np.ndarray) -> np.ndarray:
+        """
+        Collapse PIP and DIP rows into a generalized PIP row:
+            R_pipgen = R_pip + k * R_dip
+        """
+        k = float(self.coupling_ratio)
+
+        Rg = np.zeros((3, R_full.shape[1]), dtype=float)
+        Rg[0, :] = R_full[0, :]  # splay
+        Rg[1, :] = R_full[1, :]  # MCP
+        Rg[2, :] = R_full[self.pip_row, :] + k * R_full[self.dip_row, :]
+        return Rg
+
+    # def _build_R_from_paths(self) -> np.ndarray:
+    #     R = np.zeros((self.dof_count, len(self.tendon_order)), dtype=float)
+
+    #     for j, tendon_name in enumerate(self.tendon_order):
+    #         path = self.tendons[tendon_name]
+    #         if path is None:
+    #             raise KeyError("")
+
+    #         for elem in path.contacts:
+    #             if not isinstance(elem, TendonContact):
+    #                 continue
+
+    #             p = self.pulleys[elem.pulley_name] # type: ignore
+    #             if p is None:
+    #                 raise KeyError("")
+    #             row = getattr(p.shaft, "dof_row", None)
+    #             if row is None:
+    #                 continue
+                
+    #             row = int(row)
+    #             if row < 0 or row >= self.dof_count:
+    #                 raise ValueError("")
+                
+    #             R[row, j] += float(p.radius)
+            
+    #     if (
+    #         self.dof_count == 3
+    #         and self.coupling_ratio is not None
+    #         and self.pip_row is not None
+    #         and self.dip_row is not None
+    #         and self.pipgen_row is not None
+    #     ):
+    #         R = self._generalize_R(R)
+            
+    #     return R
+                
+    # def _build_R4(
+    #         self, 
+    # ) -> np.ndarray:
+    #     n = len(self.tendon_order)
+    #     R4 = np.zeros((4, n), dtype=float)
+
+    #     for j, tendon_name in enumerate(self.tendon_order):
+    #         path = self.tendon_paths.get(tendon_name, None)
+    #         if path is None:
+    #             raise ValueError("")
+            
+    #         for elem in path.contacts:
+    #             if not hasattr(elem, "pulley_name"):
+    #                 continue
+
+    #             pulley_name = getattr(elem, "pulley_name")
+    #             p = self.pulleys[pulley_name]
+
+    #             row = p.shaft.dof_row
+    #             if row is None:
+    #                 continue
+
+    #             R4[row, j] += float(p.radius)
+        
+    #     return R4
     
-    def _tendon_route_generalized(self, R4  : np.ndarray) -> np.ndarray:
-        """
-        Convert full R4 routing to generalized R3 routing. Combines PIP and DIP rows.
+    # def _generalize_R(
+    #         self,
+    #         R4: np.ndarray,
+    # ) -> np.ndarray:
+    #     k = float(self.coupling_ratio)
+    #     pip = int(self.pip_row)
+    #     dip = int(self.dip_row)
+    #     pipgen = int(self.pipgen_row)
 
-        Returns:
-            R3  : (3, ntendons)
-        """
-        R3 = np.zeros((3, R4.shape[1]), dtype=float)
-        R3[0, :] = R4[0, :]
-        R3[1, :] = R4[1, :]
-        R3[2, :] = R4[2, :] + self.k*R4[3, :]
-        return R3
+    #     R = R4.copy()
+    #     R[pipgen, :] = R4[pip, :] + k*R4[dip, :]
+    #     if pipgen != pip:
+    #         R[pip, :] = 0.0
+    #     if pipgen != dip:
+    #         R[dip, :] = 0.0
+    #     return R
     
-    def joint_torques_from_tensions(self, T) -> np.ndarray:
+    
+    def joint_torques_from_tensions(
+            self, 
+            T: np.ndarray,
+    ) -> np.ndarray:
         """ Compute tau = A @ T. """
         T = np.asarray(T, dtype=float).reshape(-1)
-        return self.A @ T
+        return self.model.A @ T
     
-    def tendon_length_rates_from_qdot(self, qdot) -> np.ndarray:
-        """ Tendon length rate from generalized joint rates.
-
-        Returns:
-            ldot    : (n_tendons,) tendon length rates (mm/s) for qdot (rads/s). 
-        """
+    def tendon_length_rates_from_qdot(
+            self, 
+            qdot: np.ndarray,
+    ) -> np.ndarray:
         qdot = np.asarray(qdot, dtype=float).reshape(-1)
-        return -(self.A.T @ qdot)
+        return -(self.model.A.T @ qdot)
 
-
-    def solve_tensions(self, tau_ref, alpha : float = 0.0):
+    def solve_tensions(
+            self, 
+            tau_ref: np.ndarray, 
+            alpha : float = 0.0,
+    ) -> Tuple[np.ndarray, float]:
         """ Solve for (positive) tendon tensions (NNLS) that best achieves the reference joint torques.
         
         Args:
@@ -89,14 +225,16 @@ class TendonTransmission:
             torque_error_norm   : ||A@T-tau|| (Nmm).
         """
         tau = np.asarray(tau_ref, dtype=float).reshape(-1)
-        m = self.A.shape[1]
-
-        if alpha == 0.0:
-            T, _ = nnls(self.A, tau)
+        if tau.shape[0] != self.dof_count:
+            raise ValueError("")
+        
+        if alpha <= 0.0:
+            T, _ = nnls(self.model.A, tau)
         else:
-            A_aug = np.vstack([self.A, np.sqrt(alpha) * np.eye(m)])
+            m = self.model.A.shape[1]
+            A_aug = np.vstack([self.model.A, np.sqrt(float(alpha)) * np.eye(m)])
             b_aug = np.concatenate([tau, np.zeros(m)])
             T, _ = nnls(A_aug, b_aug)
         
-        torque_err = np.linalg.norm(self.A @ T - tau)
-        return T, float(torque_err)
+        torque_err = float(np.linalg.norm(self.model.A @ T - tau))
+        return T, torque_err
