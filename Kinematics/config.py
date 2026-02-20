@@ -34,6 +34,9 @@ COUPLING_RATIO = 0.7
 #-------------------------------------------------
 # Bases
 #-------------------------------------------------
+
+#Added bearings based on datasheets and BOM
+#Outer diameter (includes or does not include flange) (assumed no)
 BEARING_BASES: Dict[str, BearingBase] = {
     "bearing_part_name": BearingBase(
         inner_diameter=4.0,
@@ -46,26 +49,123 @@ BEARING_BASES: Dict[str, BearingBase] = {
         C=0.0,
         C0=0.0, # Fill in the load ratings.
     ),
+    # https://www.mcmaster.com/57155K443/
+    "ball_bearing_684H": BearingBase(
+        inner_diameter=4.0,
+        outer_diameter=9.0,
+        shaft_diameter=4.0,
+        width=2.5,
+        X=1.0,
+        Y=0.0,
+        p=3.0,
+        C=553.8,
+        C0=178.0, # Fill in the load ratings.
+    ),
+    # https://www.mcmaster.com/57155K444/
+    "ball_bearing_104": BearingBase(
+        inner_diameter=4.0,
+        outer_diameter=11.2,
+        shaft_diameter=4.0,
+        width=3.0,
+        X=1.0,
+        Y=0.0,
+        p=3.0,
+        C=667.23,
+        C0=226.89, # Fill in the load ratings.
+    ),
+    # https://www.mcmaster.com/6377K139/
+    "sleeve_bearing_K139": BearingBase(
+        inner_diameter=4.0,
+        outer_diameter=5.5,
+        shaft_diameter=4.0,
+        width=6.0,
+        X=1.0,
+        Y=0.0,
+        p=3.0,
+        C=467.0,
+        C0=150.0, # Mcmaster doesnt list static load rating for this bearing
+    ),
+    # https://www.mcmaster.com/6658K114/
+    "sleeve_bearing_841": BearingBase(
+        inner_diameter=4.0,
+        outer_diameter=8.02,
+        shaft_diameter=4.0,
+        width=3.0,
+        X=1.0,
+        Y=0.0,
+        p=3.0,
+        C=164.5,
+        C0=50.0, # Mcmaster doesnt list static load rating for this bearing
+    )
+    
 }
+#Added Pulleys based on 3rd Prototype
 
 PULLEY_BASES: Dict[str, PulleyBase] = {
     "pulley_part_name": PulleyBase(
         radius=6.0,
         width=3.0
     ),
+    "pulley_small" : PulleyBase(
+        radius=4.8,
+        width=3.0
+    ),
+    "pulley_medium" : PulleyBase(
+        radius=6.0,
+        width=3.0
+    ),
+    "pulley_medium_plus" : PulleyBase(
+        radius=6.5,
+        width=3.0
+    ),
+    "pulley_medium_dplus" : PulleyBase(
+        radius=7.65,
+        width=3.0
+    ),
+    "pulley_large" : PulleyBase(
+        radius=9.0,
+        width=3.0
+    ),
+    "pulley_xl" : PulleyBase(
+        radius=12.0,
+        width=3.0
+    )
 }
 
+# Modified shaft base vetical
+# Missing / Unclear Shafts 2, B
+# Shafts 0, 1, 2, 3, extra length from e-ring + bearing section, do we count ?
 SHAFT_BASES: Dict[str, ShaftBase] = {
-    "shaft_base_horizontal": ShaftBase(
+    "shaft_base_vertical_Z": ShaftBase(
         diameter=4.0,
-        length=25.0,
-        axis=np.array([0.0, 1.0, 0.0])
-    ),
-    "shaft_base_vertical": ShaftBase(
-        diameter=4.0,
-        length=25.0,
+        length=35.0,
         axis=np.array([0.0, 0.0, 1.0])
     ),
+    "shaft_base_vertical_0": ShaftBase(
+        diameter=4.0,
+        length=37.8,
+        axis=np.array([0.0, 0.0, 1.0])
+    ),
+    "shaft_base_horizontal_A": ShaftBase(
+        diameter=4.0,
+        length=23.0,
+        axis=np.array([0.0, 1.0, 0.0])
+    ),
+    "shaft_base_horizontal_1": ShaftBase(
+        diameter=4.0,
+        length=25.8,
+        axis=np.array([0.0, 1.0, 0.0])
+    ),
+    "shaft_base_horizontal_pip_C": ShaftBase(
+        diameter=4.0,
+        length=16.0,
+        axis=np.array([0.0, 1.0, 0.0])
+    ),
+    "shaft_base_horizontal_pip_3": ShaftBase(
+        diameter=4.0,
+        length=18.8,
+        axis=np.array([0.0, 1.0, 0.0])
+    )
 }
 #-------------------------------------------------
 # Shafts
@@ -296,8 +396,12 @@ def make_pulley(
     PULLEY_ROLE[name] = role
     return p
 
+# Pulley Z (ALL LARGE)
+# Pulley A done
+# Still Incomplete need redone CAD
+
 pulley_ZA = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_ZA",
     lane=1.5,
     shaft=joint_Z,
@@ -305,7 +409,7 @@ pulley_ZA = make_pulley(
     #tendon=A,
 )
 pulley_ZB = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_ZB",
     lane=-1.5,
     shaft=joint_Z,
@@ -313,7 +417,7 @@ pulley_ZB = make_pulley(
     #tendon=A,
 )
 pulley_Z1 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_Z1",
     lane=-7.5,
     shaft=joint_Z,
@@ -321,7 +425,7 @@ pulley_Z1 = make_pulley(
     #tendon=0,
 )
 pulley_Z2 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_Z2",
     lane=-4.5,
     shaft=joint_Z,
@@ -393,7 +497,7 @@ pulley_04 = make_pulley(
     # tendon=4,
 )
 pulley_A1 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_A1",
     lane=-6.0,
     shaft=joint_A,
@@ -401,7 +505,7 @@ pulley_A1 = make_pulley(
     # tendon=0,
 )
 pulley_A2 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_medium_plus",
     name="pulley_A2",
     lane=3.0,
     shaft=joint_A,
@@ -409,7 +513,7 @@ pulley_A2 = make_pulley(
     # tendon=3,
 )
 pulley_A3 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_large",
     name="pulley_A3",
     lane=6.0,
     shaft=joint_A,
@@ -417,7 +521,7 @@ pulley_A3 = make_pulley(
     # tendon=4,
 )
 pulley_11 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_medium_plus",
     name="pulley_11",
     lane=-3.0,
     shaft=joint_1,
@@ -425,7 +529,7 @@ pulley_11 = make_pulley(
     # tendon=1,
 )
 pulley_12 = make_pulley(
-    base_key="pulley_part_name",
+    base_key="pulley_medium",
     name="pulley_12",
     lane=-3.0,
     shaft=joint_1,
@@ -821,7 +925,7 @@ TENDONS = {
 }
 
 D_main = np.array([
-    [+1.0, 1..0, 1.0, 1.0, 1.0, 1.0, +1.0],   # splay removed
+    [+1.0, 1.0, 1.0, 1.0, 1.0, 1.0, +1.0],   # splay removed
     [0.0, +1.0, +1.0, 0.0, +1.0, +1.0, 0.0],   # MCP
     [0.0, 0.0, +1.0, +1.0, +1.0, 0.0, 0.0],    # PIPgen
 ])
