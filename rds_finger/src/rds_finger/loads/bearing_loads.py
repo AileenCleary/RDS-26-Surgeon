@@ -6,7 +6,7 @@ from typing import List, Dict
 import numpy as np
 
 from rds_finger.model import FingerModel
-from rds_finger.statics.bearing_reactions import solve_two_bearing_reactions
+from rds_finger.analysis.loads.bearing_reactions import solve_two_bearing_reactions
 from rds_finger.loads.loads import compute_all_pulley_and_shaft_loads  
 
 
