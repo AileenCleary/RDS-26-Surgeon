@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import numpy as np
-from numpy.typing import NDArray
+from typing import Dict
 
+import numpy as np
 
 def feasibility_report(
-    A: NDArray[np.float64],
-    tau: NDArray[np.float64],
-    tau_hat: NDArray[np.float64],
+    A: np.ndarray,
+    tau: np.ndarray,
+    tau_hat: np.ndarray,
     *,
     atol: float = 1e-6,
-) -> dict:
+) -> Dict:
     """
     Light-weight diagnostics for NNLS feasibility.
 
@@ -40,14 +40,11 @@ def feasibility_report(
             )
             continue
 
-        # What signs can this row produce with T>=0?
-        # If there exist both positive and negative coefficients, sign is not trivially blocked.
         has_pos = np.any(ai[nz] > 0)
         has_neg = np.any(ai[nz] < 0)
 
         desired = float(tau[i])
         if abs(desired) <= atol:
-            # Only "ok" if the achieved torque is also near zero
             if abs(float(tau_hat[i])) <= 10 * atol:
                 status = "ok_zero"
             else:

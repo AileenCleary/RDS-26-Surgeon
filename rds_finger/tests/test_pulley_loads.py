@@ -1,25 +1,8 @@
 import numpy as np
-from rds_finger.model import FingerModel
-from rds_finger import config
+
+from rds_finger.model import build_model
 from rds_finger.routing.router import route_tendons
 from rds_finger.loads.pulley_loads import pulley_loads_frictionless
-
-
-def build_model() -> FingerModel:
-    return FingerModel(
-        link_lengths=config.LINK_LENGTHS,
-        coupling_ratio=config.COUPLING_RATIO,
-        shafts=config.SHAFTS,
-        pulleys=config.PULLEYS,
-        drums=config.DRUMS,
-        endpoints=config.ENDPOINTS,
-        tendons=config.TENDONS,
-        tendon_order=config.TENDON_ORDER,
-        fingertip_parent_frame="O3",
-        fingertip_offset_local=np.array([getattr(config, "FINGERTIP_OFFSET", 0.0), 0.0, 0.0], dtype=float),
-        bearings=config.BEARINGS
-    )
-
 
 def test_pulley_loads_finite_and_linear_in_T():
     m = build_model()
@@ -36,5 +19,4 @@ def test_pulley_loads_finite_and_linear_in_T():
     for a, b in zip(L1, L2):
         assert np.all(np.isfinite(a.F_world))
         assert np.all(np.isfinite(b.F_world))
-        # linear scaling
         assert np.allclose(b.F_world, 2.0 * a.F_world, atol=1e-6)

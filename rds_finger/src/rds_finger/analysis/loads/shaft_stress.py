@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Dict
+
 import numpy as np
-from numpy.typing import NDArray
 
 from rds_finger.model import FingerModel
 from rds_finger.loads.loads import ShaftLoad
-from typing import Dict
-
-
 @dataclass(frozen=True)
 class ShaftStress:
     shaft: str
@@ -30,15 +28,6 @@ def compute_shaft_stresses(
     model: FingerModel,
     shaft_loads: Dict[str, ShaftLoad],
 ) -> list[ShaftStress]:
-    """
-    Conservative bending-only stress summary from ShaftLoad.M_world.
-
-    - M := ||M_world||
-    - sigma_b := 32 M / (pi d^3)
-    - von_mises := |sigma_b| (torsion not modeled yet)
-
-    If you later add torsion, update von Mises to sqrt(sigma^2 + 3 tau^2).
-    """
     out: list[ShaftStress] = []
     for sl in shaft_loads.values():
         if sl.shaft not in model.shafts:

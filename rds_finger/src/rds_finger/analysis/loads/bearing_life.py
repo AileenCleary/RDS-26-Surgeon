@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import numpy as np
-from numpy.typing import NDArray
 
 from rds_finger.model import FingerModel
 from rds_finger.loads.bearing_loads import BearingLoad
-
 
 @dataclass(frozen=True)
 class BearingLife:
@@ -35,12 +33,6 @@ def compute_bearing_lives(
     model: FingerModel,
     bearing_loads: list[BearingLoad],
 ) -> list[BearingLife]:
-    """
-    Convert BearingLoad -> BearingLife using model.bearings ratings.
-
-    Equivalent load:
-      P := ||R_world||   (simple conservative-ish scalarization)
-    """
     out: list[BearingLife] = []
     for bl in bearing_loads:
         if bl.bearing not in model.bearings:
@@ -60,7 +52,6 @@ def compute_bearing_lives(
             )
         )
     return out
-
 
 def worst_bearing_life(bearing_lives: list[BearingLife]) -> BearingLife | None:
     if not bearing_lives:

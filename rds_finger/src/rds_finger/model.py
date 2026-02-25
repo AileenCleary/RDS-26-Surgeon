@@ -57,12 +57,10 @@ class FingerModel:
     tendon_order: list[str]
     bearings: dict[str, BearingSpec]
 
-    # NEW: fingertip definition (defaults chosen to be non-breaking)
     fingertip_parent_frame: str = "O3"
     fingertip_offset_local: NDArray[np.float64] = field(default_factory=lambda: np.array([0.0, 0.0, 0.0], dtype=float))
 
     def validate(self) -> None:
-        # validate tendon refs
         for tname, t in self.tendons.items():
             for item in t.items:
                 if isinstance(item, str):
@@ -78,7 +76,6 @@ class FingerModel:
                         raise KeyError(f"{tname} references missing pulley {item.pulley}")
                 else:
                     raise TypeError(f"Unknown tendon item type: {type(item)}")
-                # validate bearing refs
         for bname, b in self.bearings.items():
             if b.shaft not in self.shafts:
                 raise KeyError(f"Bearing '{bname}' references missing shaft '{b.shaft}'.")
@@ -91,8 +88,6 @@ class FingerModel:
         """Compute world frames and resolved world objects."""
         self.validate()
         frames = compute_frames(q, link_lengths=self.link_lengths, coupling_ratio=self.coupling_ratio)
-
-        # shafts: anchor frame gives center, axis_local in that frame
         wshafts: dict[str, WorldShaft] = {}
         for s in self.shafts.values():
             F = frames[s.anchor_frame]
@@ -104,7 +99,6 @@ class FingerModel:
                 diameter=s.diameter,
                 length=s.length,
             )
-                # bearings: center = shaft center + lane*(shaft axis)
         wbearing: dict[str, WorldBearing] = {}
         for b in self.bearings.values():
             ws = wshafts[b.shaft]
@@ -115,7 +109,6 @@ class FingerModel:
                 center=c,
                 axis=ws.axis.a.copy(),
             )
-        # pulleys: center = shaft center + lane*(shaft axis)
         wpulleys: dict[str, WorldPulley] = {}
         for p in self.pulleys.values():
             ws = wshafts[p.shaft]
@@ -128,13 +121,10 @@ class FingerModel:
                 width=float(p.width),
             )
 
-        # endpoints
         wendpoints: dict[str, WorldEndpoint] = {}
         for ep in self.endpoints.values():
             F = frames[ep.frame]
             wendpoints[ep.name] = WorldEndpoint(ep.name, F.apply(ep.p_local))
-
-        # drums
         wdrums: dict[str, WorldDrum] = {}
         for d in self.drums.values():
             F = frames[d.anchor_frame]
@@ -146,7 +136,7 @@ class FingerModel:
                 tendon=d.tendon,
                 direction=float(d.direction),
             )
-                # fingertip pose
+
         if self.fingertip_parent_frame not in frames:
             raise KeyError(
                 f"FingerModel.fingertip_parent_frame='{self.fingertip_parent_frame}' "

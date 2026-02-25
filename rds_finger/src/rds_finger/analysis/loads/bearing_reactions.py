@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from typing import Tuple
+
 import numpy as np
-
-from rds_finger.core.math3d import unit
-
 
 def solve_two_bearing_reactions(
     *,
@@ -12,7 +11,7 @@ def solve_two_bearing_reactions(
     b1_center: np.ndarray,
     b2_center: np.ndarray,
     shaft_center: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Solve for bearing reaction forces R1, R2 (3D) such that:
         R1 + R2 = -F
@@ -27,7 +26,6 @@ def solve_two_bearing_reactions(
     r1 = np.asarray(b1_center, float).reshape(3) - np.asarray(shaft_center, float).reshape(3)
     r2 = np.asarray(b2_center, float).reshape(3) - np.asarray(shaft_center, float).reshape(3)
 
-    # Build 6x6 system: [I I; [r1x] [r2x]] [R1; R2] = [-F; -M]
     I = np.eye(3)
     def cross_mat(r: np.ndarray) -> np.ndarray:
         x, y, z = float(r[0]), float(r[1]), float(r[2])

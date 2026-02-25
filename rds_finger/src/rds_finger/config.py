@@ -72,40 +72,22 @@ SHAFTS: dict[str, ShaftSpec] = {
         dof_gain=COUPLING_RATIO
     ),
 }
-# -------------------------------------------------
-# Bearings (NEW)
-# -------------------------------------------------
 
 def _bearing_lane_from_ll(shaft_name: str, *, side: int, ll: float) -> float:
-    """
-    Convert your old ll convention into a lane (mm) along the shaft axis.
-
-    - shaft length is in SHAFTS[shaft_name].length
-    - side is -1 or +1
-    - ll in [0,1] is fraction of half-length from shaft center toward that side
-    """
     if side not in (-1, +1):
         raise ValueError("side must be -1 or +1")
     L = float(SHAFTS[shaft_name].length)
     return float(side) * float(ll) * (0.5 * L)
 
-# You can tune ll per bearing if you want them closer to center/edge.
 BEARINGS = {
-    # SPLAY shaft (joint_0) bearings
     "bearing_00": BearingSpec(name="bearing_00", shaft="joint_0", lane=_bearing_lane_from_ll("joint_0", side=-1, ll=0.8)),
     "bearing_01": BearingSpec(name="bearing_01", shaft="joint_0", lane=_bearing_lane_from_ll("joint_0", side=+1, ll=0.8)),
-
-    # MCP shaft (joint_1) bearings
     "bearing_10": BearingSpec(name="bearing_10", shaft="joint_1", lane=_bearing_lane_from_ll("joint_1", side=-1, ll=0.8)),
     "bearing_11": BearingSpec(name="bearing_11", shaft="joint_1", lane=_bearing_lane_from_ll("joint_1", side=+1, ll=0.8)),
-
-    # PIP shaft (joint_2) bearings
     "bearing_20": BearingSpec(name="bearing_20", shaft="joint_2", lane=_bearing_lane_from_ll("joint_2", side=-1, ll=0.8)),
     "bearing_21": BearingSpec(name="bearing_21", shaft="joint_2", lane=_bearing_lane_from_ll("joint_2", side=+1, ll=0.8)),
-
-    # If you later model DIP as a real shaft DOF, add joint_3 bearings here.
-    # For now, keep DIP bearings out unless you actually use that shaft in shaft-load aggregation.
 }
+
 PULLEYS: dict[str, PulleySpec] = {
     "pulley_Z1": PulleySpec("pulley_Z1", radius=8.0, width=3.0, shaft="joint_Z", lane=-8.5),
     "pulley_Z2": PulleySpec("pulley_Z2", radius=8.0, width=3.0, shaft="joint_Z", lane=-5.5),

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-from numpy.typing import NDArray
 
 from rds_finger.routing.types import TendonContact, TendonPathSpec
 from rds_finger.routing.router import RoutedTendon
@@ -20,15 +19,7 @@ def tendon_geometric_length(rt: RoutedTendon) -> float:
     return float(L)
 
 
-def tendon_spool_length(model, spec: TendonPathSpec, q: NDArray[np.float64]) -> float:
-    """
-    Spool length contribution from fixed contacts.
-
-    For each TendonContact with kind="fixed":
-        L += sign * r * theta_j
-
-    NOTE: we currently use contact.side as sign. Later add explicit spool_sign.
-    """
+def tendon_spool_length(model, spec: TendonPathSpec, q: np.ndarray) -> float:
     q = np.asarray(q, float).reshape(-1)
 
     L = 0.0
@@ -40,13 +31,11 @@ def tendon_spool_length(model, spec: TendonPathSpec, q: NDArray[np.float64]) -> 
 
         pulley = model.pulleys[item.pulley]
 
-        # pulley.shaft may be a Shaft object OR a string key
         shaft_ref = getattr(pulley, "shaft", None)
         if shaft_ref is None:
             raise ValueError(f"Pulley '{item.pulley}' has no shaft reference.")
 
         if isinstance(shaft_ref, str):
-            # Most common in your current setup
             if shaft_ref not in model.shafts:
                 raise KeyError(f"Pulley '{item.pulley}' references unknown shaft '{shaft_ref}'.")
             shaft = model.shafts[shaft_ref]
@@ -70,17 +59,10 @@ def tendon_spool_length(model, spec: TendonPathSpec, q: NDArray[np.float64]) -> 
     return float(L)
 
 
-def tendon_total_length(model, spec: TendonPathSpec, q: NDArray[np.float64], rt: RoutedTendon) -> float:
+def tendon_total_length(model, spec: TendonPathSpec, q: np.ndarray, rt: RoutedTendon) -> float:
     return tendon_geometric_length(rt) + tendon_spool_length(model, spec, q)
 
 def fixed_contact_sign(spec: TendonPathSpec) -> float | None:
-    """
-    Returns an aggregate sign hint for fixed contacts on this tendon:
-      +1 or -1 if any fixed contacts exist (uses first fixed contact side),
-      None if no fixed contacts exist.
-
-    This is a weak heuristic, but it catches accidental sign flips in config.
-    """
     for item in spec.items:
         if isinstance(item, TendonContact) and getattr(item, "kind", "idler") == "fixed":
             s = float(np.sign(item.side)) if item.side != 0 else 1.0

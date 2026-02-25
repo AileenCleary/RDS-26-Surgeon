@@ -1,10 +1,8 @@
 import numpy as np
-from numpy.typing import NDArray
 
 from rds_finger.model import FingerModel
 from rds_finger.analysis.kinematics.tip_jacobian import joint_torques_from_tip_force
 from rds_finger.analysis.kinematics.jacobian import moment_arm_matrix
-from rds_finger.analysis.solvers.nnls import nnls  # <-- use your real function
 from rds_finger.loads.loads import compute_all_pulley_and_shaft_loads
 from rds_finger.loads.bearing_loads import compute_all_bearing_loads
 from rds_finger.analysis.loads.feasibility import feasibility_report
@@ -16,8 +14,8 @@ from rds_finger.analysis.loads.shaft_stress import compute_shaft_stresses, worst
 
 def analyze_tip_force(
     model: FingerModel,
-    q: NDArray[np.float64],
-    F_tip_xyz: NDArray[np.float64],
+    q: np.ndarray,
+    F_tip_xyz: np.ndarray,
     preload: float = 0.0,
 ) -> dict:
     q = np.asarray(q, float).reshape(-1)
@@ -27,7 +25,7 @@ def analyze_tip_force(
 
     A = moment_arm_matrix(model, q)  # (n_dof, n_tendon)
     # T = nnls(A, tau)
-    row_weights = np.array([0.1, 1.0, 1.0], float)  # downweight splay; prioritize MCP/PIPgen
+    row_weights = np.array([0.1, 1.0, 1.0], float) 
     T = solve_tendon_tensions(
         model, q, tau,
         preload=preload,

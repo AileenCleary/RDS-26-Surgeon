@@ -1,22 +1,7 @@
 import numpy as np
-from rds_finger.model import FingerModel
-from rds_finger import config
+
+from rds_finger.model import build_model
 from rds_finger.kinematics.jacobian_tip import tip_jacobian_xyz, tip_force_to_joint_torque
-
-
-def build_model() -> FingerModel:
-    return FingerModel(
-        link_lengths=config.LINK_LENGTHS,
-        coupling_ratio=config.COUPLING_RATIO,
-        shafts=config.SHAFTS,
-        pulleys=config.PULLEYS,
-        drums=config.DRUMS,
-        endpoints=config.ENDPOINTS,
-        tendons=config.TENDONS,
-        tendon_order=config.TENDON_ORDER,
-        bearings=config.BEARINGS
-    )
-
 
 def test_tip_jacobian_shape_and_finite():
     m = build_model()

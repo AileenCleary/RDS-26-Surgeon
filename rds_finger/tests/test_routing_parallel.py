@@ -7,6 +7,5 @@ def test_parallel_tangents_count():
     axis = np.array([0.0,1.0,0.0])
     tans = tangents_two_circles_parallel_axis(c1, 5.0, c2, 3.0, axis)
     assert len(tans) == 4
-    # each point should be ~radius from its center in plane
     for p1,p2 in tans:
         assert abs(np.linalg.norm(p1-c1) - 5.0) < 1e-6

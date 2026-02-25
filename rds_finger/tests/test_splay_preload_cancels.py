@@ -1,23 +1,6 @@
 import numpy as np
-from rds_finger import config
-from rds_finger.model import FingerModel
-from rds_finger.loads.bearing_loads import compute_all_bearing_loads
 
-
-def build_model() -> FingerModel:
-    return FingerModel(
-        link_lengths=config.LINK_LENGTHS,
-        coupling_ratio=config.COUPLING_RATIO,
-        shafts=config.SHAFTS,
-        pulleys=config.PULLEYS,
-        drums=config.DRUMS,
-        endpoints=config.ENDPOINTS,
-        tendons=config.TENDONS,
-        tendon_order=config.TENDON_ORDER,
-        bearings=config.BEARINGS,  # NEW
-        fingertip_parent_frame="O3",
-        fingertip_offset_local=np.array([getattr(config, "FINGERTIP_OFFSET", 0.0), 0.0, 0.0], float),
-    )
+from rds_finger.model import build_model
 from rds_finger.analysis.kinematics.jacobian import moment_arm_matrix
 
 

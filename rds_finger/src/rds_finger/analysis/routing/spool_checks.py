@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import numpy as np
 
 from rds_finger.model import FingerModel
@@ -18,15 +19,6 @@ class SpoolDirectionCheck:
 
 
 def check_spool_directions(model: FingerModel) -> list[SpoolDirectionCheck]:
-    """
-    Sanity checks only.
-
-    - If tendon has fixed contact(s), it implies a sign convention for spool length.
-    - Drum has a configured winding direction.
-
-    We flag mismatches so you catch config sign errors early.
-    """
-    # tendon -> drum (first drum found)
     tendon_to_drum: dict[str, str] = {}
     tendon_to_dir: dict[str, float] = {}
 
@@ -50,7 +42,6 @@ def check_spool_directions(model: FingerModel) -> list[SpoolDirectionCheck]:
             ))
             continue
 
-        # This is *not* a rigorous physics constraint, just a convention check:
         ok = (np.sign(fsign) == np.sign(ddir))
         out.append(SpoolDirectionCheck(
             tendon=tname, drum=dname, fixed_sign=float(np.sign(fsign)), drum_direction=float(np.sign(ddir)),

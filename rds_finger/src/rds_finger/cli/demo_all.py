@@ -29,9 +29,6 @@ def _as_vec3(v: Any) -> np.ndarray:
         raise ValueError(f"Expected 3-vector, got shape {a.shape}.")
     return a.reshape(3)
 
-
-# ------------------------------- load adapters -------------------------------
-
 @dataclass(frozen=True)
 class _LoadVec:
     """Normalized representation of any load item with a single vector field."""
@@ -48,12 +45,6 @@ class _ShaftLoadVec:
 
 
 def _iter_values(x: Any) -> Iterator[Any]:
-    """
-    Iterate through values for a container that might be:
-      - list/tuple of items
-      - dict[name -> item] or dict[name -> raw_vector]
-      - single item
-    """
     if x is None:
         return
         yield  # pragma: no cover
@@ -69,13 +60,6 @@ def _iter_values(x: Any) -> Iterator[Any]:
 
 
 def _normalize_pulley_loads(pulley_loads: Any) -> list[_LoadVec]:
-    """
-    Accepts multiple shapes:
-      - list[PulleyLoad] where PulleyLoad has .pulley and .F_world
-      - dict[pulley -> vec3]
-      - list[dict] with keys {"pulley", "F_world"} or {"name","F_world"}
-      - list[(name, vec3)]
-    """
     out: list[_LoadVec] = []
     if isinstance(pulley_loads, dict):
         for k, v in pulley_loads.items():
@@ -109,13 +93,6 @@ def _normalize_pulley_loads(pulley_loads: Any) -> list[_LoadVec]:
 
 
 def _normalize_shaft_loads(shaft_loads: Any) -> list[_ShaftLoadVec]:
-    """
-    Accepts multiple shapes:
-      - list[ShaftLoad] where ShaftLoad has .shaft, .F_world, .M_world
-      - dict[shaft -> ShaftLoad] or dict[shaft -> {"F_world":..., "M_world":...}]
-      - list[dict] with keys {"shaft","F_world","M_world"} (or {"F","M"})
-      - list[(F, M)] (name-less) is allowed but will be labeled "shaft"
-    """
     out: list[_ShaftLoadVec] = []
 
     if isinstance(shaft_loads, dict):
@@ -157,13 +134,6 @@ def _normalize_shaft_loads(shaft_loads: Any) -> list[_ShaftLoadVec]:
 
 
 def _normalize_bearing_loads(bearing_loads: Any) -> list[_LoadVec]:
-    """
-    Accepts multiple shapes:
-      - list[BearingLoad] where BearingLoad has .bearing and .R_world
-      - dict[bearing -> vec3]
-      - list[dict] with keys {"bearing","R_world"} or {"name","R_world"}
-      - list[(name, vec3)]
-    """
     out: list[_LoadVec] = []
     if isinstance(bearing_loads, dict):
         for k, v in bearing_loads.items():
@@ -202,11 +172,10 @@ def main() -> None:
     m = build_model()
 
     # Example pose + load case
-    q = np.array([0.0, 0.3, 0.5], dtype=float)          # rad
+    q = np.array([0.0, 0.0, 0.0], dtype=float)          # rad
     F_tip = np.array([0.0, 0.0, 20.0], dtype=float)     # N (up +Z)
     preload = 5.0                                      # N
 
-    # World state (for tip pose display)
     (
         _frames,
         tip_pose,
@@ -217,7 +186,6 @@ def main() -> None:
         _wbearings,
     ) = m.world_state(q)
 
-    # Full pipeline
     out = analyze_tip_force(m, q, F_tip, preload=float(preload))
 
     tau = np.asarray(out["tau"], float).reshape(-1)
@@ -234,7 +202,6 @@ def main() -> None:
     bearing_lives = out.get("bearing_lives", [])
     shaft_stresses = out.get("shaft_stresses", [])
 
-    # ---- Print report ----
     print("\n================== rds_finger demo_all ==================")
     print("Model summary:")
     print(f"  DOF count: {q.size}")
@@ -293,7 +260,6 @@ def main() -> None:
         print("")
 
     print("Loads summary:")
-    # For display, count normalized items so you don't get fooled by dict-vs-list.
     pl_norm = _normalize_pulley_loads(pulley_loads)
     sl_norm = _normalize_shaft_loads(shaft_loads)
     bl_norm = _normalize_bearing_loads(bearing_loads)
@@ -322,7 +288,6 @@ def main() -> None:
             print(f"  von_mises (bending-only) = {worstS.von_mises_MPa:.3f} MPa")
             print("")
 
-    # ---- Sanity checks (raise loudly if anything is broken) ----
     print("Sanity checks:")
 
     assert np.isfinite(tau).all()

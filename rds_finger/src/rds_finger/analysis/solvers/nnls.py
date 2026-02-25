@@ -1,23 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
-from numpy.typing import NDArray
 
-
-def nnls_projected_gradient(A: NDArray[np.float64], b: NDArray[np.float64], iters: int = 5000) -> NDArray[np.float64]:
-    """
-    Simple NNLS fallback: projected gradient descent on 0.5||Ax-b||^2 with x>=0.
-    Not the fastest, but robust and dependency-free.
-
-    Returns x >= 0.
-    """
+def nnls_projected_gradient(A: np.ndarray, b: np.ndarray, iters: int = 5000) -> np.ndarray:
     A = np.asarray(A, float)
     b = np.asarray(b, float).reshape(-1)
 
     m, n = A.shape
     x = np.zeros(n, float)
 
-    # Lipschitz constant for grad: ||A^T A||_2. Approx via power iteration.
     def power_iter(M, k=50):
         v = np.random.randn(M.shape[1])
         v /= np.linalg.norm(v)
@@ -41,10 +32,7 @@ def nnls_projected_gradient(A: NDArray[np.float64], b: NDArray[np.float64], iter
     return x
 
 
-def nnls(A: NDArray[np.float64], b: NDArray[np.float64]) -> NDArray[np.float64]:
-    """
-    NNLS wrapper: use scipy.optimize.nnls if available, else fallback.
-    """
+def nnls(A: np.ndarray, b: np.ndarray) -> np.ndarray:
     try:
         from scipy.optimize import nnls as scipy_nnls  # type: ignore
         x, _ = scipy_nnls(np.asarray(A, float), np.asarray(b, float).reshape(-1))

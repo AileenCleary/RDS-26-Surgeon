@@ -12,10 +12,8 @@ def test_point_circle_tangency():
     assert len(tpts) == 2
 
     for q in tpts:
-        # on circle radius in plane
         assert abs(np.linalg.norm(q - c) - r) < 1e-6
 
-        # tangent condition: (q - c) ⟂ (p - q) in plane
         u = q - c
         v = p - q
         a = unit(axis)

@@ -1,16 +1,15 @@
 from __future__ import annotations
-import numpy as np
-from numpy.typing import NDArray
 
-def nnls(A: NDArray[np.float64], b: NDArray[np.float64]) -> NDArray[np.float64]:
+import numpy as np
+
+def nnls(A: np.ndarray, b: np.ndarray) -> np.ndarray:
     A = np.asarray(A, float)
     b = np.asarray(b, float).reshape(-1)
     try:
-        from scipy.optimize import nnls as scipy_nnls  # type: ignore
+        from scipy.optimize import nnls as scipy_nnls  
         x, _ = scipy_nnls(A, b)
         return x
     except Exception:
-        # projected gradient fallback
         x = np.zeros(A.shape[1], float)
         AtA = A.T @ A
         Atb = A.T @ b

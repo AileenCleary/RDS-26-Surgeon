@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import numpy as np
-from numpy.typing import NDArray
 
 from rds_finger.model import FingerModel
 
@@ -19,18 +19,8 @@ class DrumTorque:
 
 def compute_drum_torques(
     model: FingerModel,
-    tensions: NDArray[np.float64],
+    tensions: np.ndarray,
 ) -> list[DrumTorque]:
-    """
-    Compute torque required at each motor drum given tendon tensions.
-
-    Convention:
-      torque_Nmm = direction * radius_mm * tension_N
-
-    - radius is assumed mm
-    - tension is N
-    - output torque is N*mm
-    """
     T = np.asarray(tensions, float).reshape(-1)
 
     tendon_index = {name: i for i, name in enumerate(model.tendon_order)}
@@ -63,8 +53,4 @@ def compute_drum_torques(
 
 
 def motor_torque_summary(drum_torques: list[DrumTorque]) -> dict[str, float]:
-    """
-    Simple summary: torque per drum.
-    If later you model multi-drum motors, aggregate them in config (same motor name).
-    """
     return {dt.drum: float(dt.torque_Nmm) for dt in drum_torques}
