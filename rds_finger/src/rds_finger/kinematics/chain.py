@@ -5,7 +5,7 @@ from typing import Dict
 import numpy as np
 
 from rds_finger.core.frames import Pose
-from rds_finger.core.math3d import rot_axis_angle
+from rds_finger.core.math3d import rot_axis_angle, as3
 from rds_finger.kinematics.coupling import dip_from_pip
 
 def compute_frames(
@@ -20,7 +20,7 @@ def compute_frames(
     link_lengths:   Dictionary mapping link names (phalanx name) to their length.
     coupling_ratio: Coupling ratio relating thetaDIP to thetaPIP.
     """
-    q = np.asarray(q, dtype=float).reshape(3)
+    q = as3(q)
     th_splay, th_mcp, th_pip = map(float, q)
     th_dip = dip_from_pip(th_pip, coupling_ratio)
     

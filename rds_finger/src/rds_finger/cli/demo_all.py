@@ -165,7 +165,16 @@ def _normalize_bearing_loads(bearing_loads: Any) -> list[_LoadVec]:
 
     return out
 
+JOINT_NAMES = ["q0 (splay)", "q1 (MCP)", "q2 (PIPgen)"]
 
+def _print_joint_torques(tau: np.ndarray, names: list[str] | None = None, unit: str = "N*mm") -> None:
+    tau = np.asarray(tau, float).reshape(-1)
+    if names is None or len(names) != tau.size:
+        names = [f"q{i}" for i in range(tau.size)]
+    print(f"Joint torques ({unit}):")
+    # for n, v in zip(names, tau):
+    for n, v in zip(JOINT_NAMES, tau):
+        print(f"  {n:>12s}: {float(v): .3f}")
 # ------------------------------- demo main -------------------------------
 
 def main() -> None:
@@ -224,8 +233,8 @@ def main() -> None:
     print("")
 
     print("Statics core:")
-    print(f"  tau_ref (N*mm): {_fmt_vec3(tau, 'N*mm')}")
-    print("  A(q) (N*mm per N):")
+    _print_joint_torques(tau, getattr(m, "dof_names", None), unit="N*mm")
+    print("\n  A(q) (N*mm per N):")
     print(_fmt_mat(A))
     print("")
 
