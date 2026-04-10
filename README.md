@@ -100,6 +100,12 @@ Joint limits are set based on our mechanical design specifications: MCP flexion,
 
 ---
 
+## Demo
+
+A short demo video of the current finger simulation:
+
+[Download the demo video](demo.mp4)
+
 ## AI Usage
 
 Claude was used to help debug SDF coordinate frame calculations, troubleshoot Drake API issues, and assist with code structure.
