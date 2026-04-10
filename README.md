@@ -21,20 +21,17 @@ This repo contains our Drake simulation of the Surgeon team's robotic finger. Th
 
 ## Running the Simulation
 
-Install Drake:
-```bash
-pip install drake==0.0.20260129
-```
+Note: the simulation code is on the `simulation` branch.
 
 Clone the repo:
 ```bash
-git clone https://github.com/AileenCleary/RDS-26-Surgeon.git
+git clone -b simulation https://github.com/AileenCleary/RDS-26-Surgeon.git
 cd RDS-26-Surgeon
 ```
 
-Open `scripts/test_kinematic.py` and update `PACKAGE_ROOT` to match where you cloned the repo on your machine:
+Open `scripts/test_kinematic.py` and update `PACKAGE_ROOT` to the absolute path of the `models` folder on your machine:
 ```python
-PACKAGE_ROOT = "/your/path/to/finger_drake_sim/models"
+PACKAGE_ROOT = "/your/path/to/RDS-26-Surgeon/models"
 ```
 
 Then run:
@@ -43,7 +40,6 @@ python3 scripts/test_kinematic.py
 ```
 
 Open `http://localhost:7000` in a browser when the script starts. Press ▶ in Meshcat to replay the animation.
-
 ---
 
 ## File Structure
