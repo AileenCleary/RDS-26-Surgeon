@@ -85,6 +85,114 @@ for idx, torque in enumerate(tau_joint):
 
 S = CONFIG.S
 
+def solve_tendon_tensions_preload_qp(
+        S,
+        tau,
+        preload=10.0,
+        max_tension=np.inf,
+        tendon_weights=None,
+        pair_weights=None,
+        x0=None,
+):
+    """
+    Solve tendon tensions by minimizing deviation from a common preload.
+
+    Minimize:
+        0.5 * sum_i w_i * (T_i - preload)^2
+        + 0.5 * sum_(i,j,k) pair_w * (T_i - T_j)^2
+
+    Subject to:
+        S @ T = tau
+        0 <= T_i <= max_tension
+
+    Inputs
+    ------
+    S : (m,n) array
+    tau : (m,) array
+    preload : desired baseline tendon tension
+    max_tension : scalar or length-n array
+    tendon_weights : optional length-n weights
+    pair_weights : optional list of tuples (i, j, w)
+        penalizes difference between tendon i and j
+    x0 : optional initial guess
+
+    Returns
+    -------
+    T : solution tensions
+    res : scipy optimize result
+    """
+    S = np.asarray(S, dtype=float)
+    tau = np.asarray(tau, dtype=float)
+    m, n = S.shape
+
+    if tendon_weights is None:
+        tendon_weights = np.ones(n, dtype=float)
+    else:
+        tendon_weights = np.asarray(tendon_weights, dtype=float)
+
+    if np.isscalar(max_tension):
+        ub = np.full(n, float(max_tension))
+    else:
+        ub = np.asarray(max_tension, dtype=float)
+
+    lb = np.zeros(n, dtype=float)
+
+    if x0 is None:
+        x0 = np.full(n, preload, dtype=float)
+
+        # project initial guess toward feasibility with least-squares correction
+        try:
+            dx, *_ = np.linalg.lstsq(S, tau - S @ x0, rcond=None)
+            x0 = x0 + dx
+        except np.linalg.LinAlgError:
+            pass
+
+        x0 = np.clip(x0, lb, ub)
+
+    def obj(T):
+        T = np.asarray(T, dtype=float)
+
+        val = 0.5 * np.sum(tendon_weights * (T - preload)**2)
+
+        if pair_weights is not None:
+            for i, j, w in pair_weights:
+                val += 0.5 * w * (T[i] - T[j])**2
+
+        return val
+
+    def grad(T):
+        T = np.asarray(T, dtype=float)
+
+        g = tendon_weights * (T - preload)
+
+        if pair_weights is not None:
+            for i, j, w in pair_weights:
+                d = w * (T[i] - T[j])
+                g[i] += d
+                g[j] -= d
+
+        return g
+
+    cons = [{
+        "type": "eq",
+        "fun": lambda T: S @ T - tau,
+        "jac": lambda T: S,
+    }]
+
+    bounds = [(lb[i], ub[i]) for i in range(n)]
+
+    res = minimize(
+        fun=obj,
+        x0=x0,
+        jac=grad,
+        bounds=bounds,
+        constraints=cons,
+        method="SLSQP",
+        options={"ftol": 1e-10, "maxiter": 1000},
+    )
+
+    return res.x, res
+
 def solve_tendon_tensions(S, tau, optimization_option=None):
     if optimization_option is None:
         Ts, rnorm = nnls(S, tau)
@@ -129,7 +237,8 @@ def solve_tendon_tensions(S, tau, optimization_option=None):
         #print("\nFailed: Maximum torque exceeded for all motor choices for this S, joint_torque.")
         return results
 
-T1, rnorm1 = solve_tendon_tensions(S, tau_joint, None)
+# T1, rnorm1 = solve_tendon_tensions(S, tau_joint, None)
+T1, rnorm1 = solve_tendon_tensions_preload_qp(S, tau_joint)
 res = solve_tendon_tensions(S, tau_joint, "maximum minimum tensions")
 
 print(f"\nTendon Tensions (N):")

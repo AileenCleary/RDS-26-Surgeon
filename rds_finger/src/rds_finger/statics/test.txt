@@ -1,0 +1,70 @@
+(venv) aclea@LAPTOP-454HSPOL:~/Northwestern/RDS/RDS-26-Surgeon$ python3 rds_finger/src/rds_finger/kinematics/kinematics2.py
+
+Space Jacobian Js:
+[[ 0.  0.  0.]
+ [ 0.  1.  1.]
+ [ 1.  0.  0.]
+ [-0.  0.  0.]
+ [-0.  0.  0.]
+ [-0. 21. 65.]]
+
+Joint Torques (N*mm):
+    SPLAY: 0.0000
+    MCP: -2000.0000
+    PIP: -1120.0000
+
+Routing matrix S (3 joints x 7 tendons):
+[[  0.    0.    0.    0.    0.    0.    0. ]
+ [-12.6   9.1   0.    0.    0.    0.    0. ]
+ [  0.    0.  -10.   10.    0.    0.    0. ]]
+
+Tendon names:  ['MCP_flx', 'MCP_ext', 'PIP_flx', 'PIP_ext', 'INTERNAL_flx', 'INTERNAL_ext', 'SPLAY']
+Active tendons (driver pulleys, contribute torque): ['MCP_flx', 'MCP_ext', 'PIP_flx', 'PIP_ext']
+Free tendons   (all idlers, pinned to preload):     ['INTERNAL_flx', 'INTERNAL_ext', 'SPLAY']
+
+Active S shape: (3, 4), rank: 2
+Least-squares T (no sign constraint): [104.32 -75.34  56.   -56.  ]
+Least-squares residual: 5.0842e-13 ✓ (tau reachable)
+
+============================================================
+Preload Solution (minimum effort — antagonist = preload):
+============================================================
+
+Tendon Tensions (N):
+    MCP_flx: 165.9524
+    MCP_ext: 10.0000
+    PIP_flx: 122.0000
+    PIP_ext: 10.0000
+    INTERNAL_flx: 10.0000  [free — pinned to preload]
+    INTERNAL_ext: 10.0000  [free — pinned to preload]
+    SPLAY: 10.0000  [free — pinned to preload]
+
+Per-joint breakdown:
+    MCP: agonist=MCP_flx (165.95 N)  antagonist=MCP_ext (10.00 N)  tau_achieved=-2000.00 N*mm
+    PIP: agonist=PIP_flx (122.00 N)  antagonist=PIP_ext (10.00 N)  tau_achieved=-1120.00 N*mm
+
+tau_hat:       [    0. -2000. -1120.]
+tau_joint:     [    0. -2000. -1120.]
+residual norm: 0.0000e+00
+
+============================================================
+Max-Min LP Solution (maximize minimum active tendon tension):
+============================================================
+
+Motor: DS42S01 | Max Tension: 212.50 N
+    Success!
+
+Tendon Tensions (N):
+    MCP_flx: 212.5000
+    MCP_ext: 74.4505
+    PIP_flx: 212.5000
+    PIP_ext: 100.5000
+    INTERNAL_flx: 10.0000  [free — pinned to preload]
+    INTERNAL_ext: 10.0000  [free — pinned to preload]
+    SPLAY: 10.0000  [free — pinned to preload]
+
+t* (min active tension): 74.4505 N
+tau_hat:                 [    0. -2000. -1120.]
+tau_joint:               [    0. -2000. -1120.]
+residual norm:           0.0000e+00
+(venv) aclea@LAPTOP-454HSPOL:~/Northwestern/RDS/RDS-26-Surgeon$ 
