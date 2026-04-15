@@ -143,6 +143,19 @@ def dist_from_center_signed(
 ):
     return float(t[1] - c[1])
 
+def signed_wrap_coord_2d(t, c, axis, tol=1e-9):
+    axis = unit(axis)
+
+    if np.allclose(axis, np.array([0.0, 1.0, 0.0]), atol=tol):
+        # y-axis pulley: current behavior already works
+        return float(t[1] - c[1])
+
+    if np.allclose(axis, np.array([0.0, 0.0, 1.0]), atol=tol):
+        # z-axis pulley: use projected x instead
+        return float(t[0] - c[0])
+
+    raise ValueError(f"Unsupported pulley axis for signed wrap coordinate: {axis}")
+
 def choose_tangent_point_to_pulley(
         point: Point3D,
         pulley: Pulley,
@@ -155,7 +168,7 @@ def choose_tangent_point_to_pulley(
     c = np.array([0.0, 0.0], dtype=float)
 
     for pt in tan_pts:
-        ht = dist_from_center_signed(pt, c)
+        ht = signed_wrap_coord_2d(pt, c, pulley.axis)
         score = dir * ht
         if score > alpha:
             alpha = score
@@ -194,8 +207,8 @@ def choose_tangent_pulley_to_pulley(
         pt1 = pts[0]
         pt2 = pts[1]
 
-        h1 = dist_from_center_signed(pt1, c1_2d)
-        h2 = dist_from_center_signed(pt2, c2_2d)
+        h1 = signed_wrap_coord_2d(pt1, c1_2d, pulley1.axis)
+        h2 = signed_wrap_coord_2d(pt2, c2_2d, pulley1.axis)
         score = dir1 * h1 + dir2 * h2
         if score > alpha:
             alpha = score
