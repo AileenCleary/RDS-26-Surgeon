@@ -1,0 +1,305 @@
+#include <SPI.h>
+#include <math.h>
+
+// ===================== Pin settings =====================
+// Teensy 4.1 default SPI pins:
+// MOSI = 11, MISO = 12, SCK = 13
+
+const int NUM_ENC = 4;
+
+const int CS_PINS[NUM_ENC] = {
+  10,  // JENC1_CS = SPLAY
+  25,  // JENC2_CS = MCP
+  36,  // JENC3_CS = PIP
+  37   // JENC4_CS = DIP
+};
+
+const char* ENC_NAMES[NUM_ENC] = {
+  "SPLAY",
+  "MCP",
+  "PIP",
+  "DIP"
+};
+
+const uint32_t SPI_HZ = 1000000;
+const uint32_t PERIOD_MS = 200;
+
+const uint8_t SPI_MODE_USED = SPI_MODE1;
+
+// ===================== MA782 BCT settings =====================
+
+const uint8_t REG_BCT = 0x02;       // BCT[7:0]
+const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
+
+// Initial value to try. Also test 0, 86, 129, 155, 172.
+const uint8_t BCT_VALUE = 110;
+
+// Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
+const bool TRIM_X = true;
+const bool TRIM_Y = false;
+
+// ===================== Calibration variables =====================
+
+bool haveZero = false;
+bool haveCal = false;
+
+uint16_t w_zero[NUM_ENC] = {0, 0, 0, 0};
+uint16_t w_cal[NUM_ENC]  = {0, 0, 0, 0};
+
+// SPLAY: +10 deg
+// MCP/PIP/DIP: +90 deg
+const float CAL_TARGET_DEG[NUM_ENC] = {
+  10.0f,  // SPLAY
+  90.0f,  // MCP
+  90.0f,  // PIP
+  90.0f   // DIP
+};
+
+// ===================== SPI functions =====================
+
+uint16_t spiTransfer16(int csPin, uint16_t data) {
+  SPI.beginTransaction(SPISettings(SPI_HZ, MSBFIRST, SPI_MODE_USED));
+
+  digitalWrite(csPin, LOW);
+  delayMicroseconds(1);
+
+  uint16_t w = SPI.transfer16(data);
+
+  delayMicroseconds(1);
+  digitalWrite(csPin, HIGH);
+
+  SPI.endTransaction();
+
+  return w;
+}
+
+uint16_t spiRead16(int csPin) {
+  return spiTransfer16(csPin, 0x0000);
+}
+
+void readAllEncoders(uint16_t w[NUM_ENC]) {
+  for (int i = 0; i < NUM_ENC; i++) {
+    w[i] = spiRead16(CS_PINS[i]);
+  }
+}
+
+// MA782 write register:
+// first 16-bit frame: [100][5-bit register address][8-bit value]
+// second 16-bit frame: 0x0000, returns register value in low 8 bits
+uint8_t ma782WriteRegister(int csPin, uint8_t regAddr, uint8_t value) {
+  uint16_t cmd = (0b100 << 13) | ((regAddr & 0x1F) << 8) | value;
+
+  spiTransfer16(csPin, cmd);
+  delayMicroseconds(2);
+
+  uint16_t resp = spiTransfer16(csPin, 0x0000);
+  return resp & 0xFF;
+}
+
+// MA782 read register:
+// first 16-bit frame: [010][5-bit register address][00000000]
+// second 16-bit frame: 0x0000, returns register value in low 8 bits
+uint8_t ma782ReadRegister(int csPin, uint8_t regAddr) {
+  uint16_t cmd = (0b010 << 13) | ((regAddr & 0x1F) << 8);
+
+  spiTransfer16(csPin, cmd);
+  delayMicroseconds(2);
+
+  uint16_t resp = spiTransfer16(csPin, 0x0000);
+  return resp & 0xFF;
+}
+
+void setBCTForAllEncoders() {
+  uint8_t trimReg = 0x00;
+
+  if (TRIM_X) {
+    trimReg |= 0x01;  // ETX = bit0
+  }
+
+  if (TRIM_Y) {
+    trimReg |= 0x02;  // ETY = bit1
+  }
+
+  Serial.println("Setting BCT for all MA782 encoders...");
+  Serial.print("BCT_VALUE = ");
+  Serial.println(BCT_VALUE);
+  Serial.print("Trim register = 0x");
+  Serial.println(trimReg, HEX);
+
+  for (int i = 0; i < NUM_ENC; i++) {
+    uint8_t bctAck = ma782WriteRegister(CS_PINS[i], REG_BCT, BCT_VALUE);
+    delayMicroseconds(5);
+
+    uint8_t trimAck = ma782WriteRegister(CS_PINS[i], REG_TRIM_DIR, trimReg);
+    delayMicroseconds(5);
+
+    uint8_t bctRead = ma782ReadRegister(CS_PINS[i], REG_BCT);
+    delayMicroseconds(5);
+
+    uint8_t trimRead = ma782ReadRegister(CS_PINS[i], REG_TRIM_DIR);
+    delayMicroseconds(5);
+
+    Serial.print("  ");
+    Serial.print(ENC_NAMES[i]);
+    Serial.print(" BCT ack=");
+    Serial.print(bctAck);
+    Serial.print(" read=");
+    Serial.print(bctRead);
+
+    Serial.print(" | trim ack=0x");
+    Serial.print(trimAck, HEX);
+    Serial.print(" read=0x");
+    Serial.println(trimRead, HEX);
+  }
+
+  Serial.println();
+}
+
+// ===================== Angle conversion =====================
+
+// 16-bit wrap-around difference
+int32_t diff16(uint16_t a, uint16_t b) {
+  int32_t d = (int32_t)a - (int32_t)b;
+
+  if (d > 32768) {
+    d -= 65536;
+  }
+
+  if (d < -32768) {
+    d += 65536;
+  }
+
+  return d;
+}
+
+float countsToDeg(int32_t counts) {
+  return counts * (360.0f / 65536.0f);
+}
+
+float computeJointDeg(int i, uint16_t w_now) {
+  float deg_sensor = 0.0f;
+
+  if (haveZero) {
+    deg_sensor = countsToDeg(diff16(w_now, w_zero[i]));
+  }
+
+  float jointDeg = deg_sensor;
+
+  if (haveZero && haveCal) {
+    float deg_cal_sensor = countsToDeg(diff16(w_cal[i], w_zero[i]));
+
+    if (fabs(deg_cal_sensor) > 1e-3f) {
+      float scale = CAL_TARGET_DEG[i] / deg_cal_sensor;
+      jointDeg = scale * deg_sensor;
+    }
+  }
+
+  return jointDeg;
+}
+
+// ===================== Setup =====================
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) {}
+
+  SPI.begin();
+
+  for (int i = 0; i < NUM_ENC; i++) {
+    pinMode(CS_PINS[i], OUTPUT);
+    digitalWrite(CS_PINS[i], HIGH);
+  }
+
+  Serial.println("4-Encoder SPI angle test + BCT");
+  Serial.println("JENC1 = SPLAY, range should be about -10 to +10 deg");
+  Serial.println("JENC2 = MCP, range 0 to 90 deg");
+  Serial.println("JENC3 = PIP, range 0 to 90 deg");
+  Serial.println("JENC4 = DIP, range 0 to 90 deg");
+  Serial.println();
+
+  setBCTForAllEncoders();
+
+  Serial.println("Commands:");
+  Serial.println("  z : set all current positions as 0 deg");
+  Serial.println("  n : set calibration point");
+  Serial.println("      SPLAY current position = +10 deg");
+  Serial.println("      MCP/PIP/DIP current position = +90 deg");
+  Serial.println();
+}
+
+// ===================== Main loop =====================
+
+void loop() {
+  uint16_t w[NUM_ENC];
+
+  // Handle serial commands
+  while (Serial.available()) {
+    char c = Serial.read();
+
+    if (c == 'z') {
+      readAllEncoders(w);
+
+      for (int i = 0; i < NUM_ENC; i++) {
+        w_zero[i] = w[i];
+      }
+
+      haveZero = true;
+
+      Serial.println("Set ZERO for all encoders:");
+      for (int i = 0; i < NUM_ENC; i++) {
+        Serial.print("  ");
+        Serial.print(ENC_NAMES[i]);
+        Serial.print(" ZERO W=0x");
+        Serial.println(w_zero[i], HEX);
+      }
+      Serial.println();
+    }
+
+    else if (c == 'n') {
+      readAllEncoders(w);
+
+      for (int i = 0; i < NUM_ENC; i++) {
+        w_cal[i] = w[i];
+      }
+
+      haveCal = true;
+
+      Serial.println("Set calibration point for all encoders:");
+      for (int i = 0; i < NUM_ENC; i++) {
+        Serial.print("  ");
+        Serial.print(ENC_NAMES[i]);
+        Serial.print(" CAL W=0x");
+        Serial.print(w_cal[i], HEX);
+        Serial.print(" -> ");
+        Serial.print(CAL_TARGET_DEG[i], 1);
+        Serial.println(" deg");
+      }
+      Serial.println();
+    }
+  }
+
+  // Read all encoders
+  readAllEncoders(w);
+
+  // Print one line for all 4 encoders
+  for (int i = 0; i < NUM_ENC; i++) {
+    float jointDeg = computeJointDeg(i, w[i]);
+
+    Serial.print(ENC_NAMES[i]);
+    Serial.print("_W=0x");
+    Serial.print(w[i], HEX);
+
+    Serial.print(" ");
+    Serial.print(ENC_NAMES[i]);
+    Serial.print("_Deg=");
+    Serial.print(jointDeg, 2);
+
+    if (i < NUM_ENC - 1) {
+      Serial.print(" | ");
+    }
+  }
+
+  Serial.println();
+
+  delay(PERIOD_MS);
+}
