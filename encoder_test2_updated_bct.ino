@@ -32,7 +32,7 @@ const uint8_t REG_BCT = 0x02;       // BCT[7:0]
 const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
 
 // Initial value to try. Also test 0, 86, 129, 155, 172.
-const uint8_t BCT_VALUE = 110;
+const uint8_t BCT_VALUE = 96;
 
 // Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
 const bool TRIM_X = true;
@@ -41,7 +41,7 @@ const bool TRIM_Y = false;
 // ===================== Calibration variables =====================
 
 bool haveZero = false;
-bool haveCal = false;
+bool haveCal[NUM_ENC] = {false, false, false, false};
 
 uint16_t w_zero[NUM_ENC] = {0, 0, 0, 0};
 uint16_t w_cal[NUM_ENC]  = {0, 0, 0, 0};
@@ -185,12 +185,20 @@ float computeJointDeg(int i, uint16_t w_now) {
 
   float jointDeg = deg_sensor;
 
-  if (haveZero && haveCal) {
+  if (haveZero && haveCal[i]) {
     float deg_cal_sensor = countsToDeg(diff16(w_cal[i], w_zero[i]));
 
-    if (fabs(deg_cal_sensor) > 1e-3f) {
+    if (fabs(deg_cal_sensor) > 5.0f) {
       float scale = CAL_TARGET_DEG[i] / deg_cal_sensor;
       jointDeg = scale * deg_sensor;
+    } else {
+      jointDeg = deg_sensor;
+
+      Serial.print("WARNING: ");
+      Serial.print(ENC_NAMES[i]);
+      Serial.print(" calibration span too small: ");
+      Serial.print(deg_cal_sensor, 3);
+      Serial.print(" deg. Using raw sensor angle. ");
     }
   }
 
@@ -221,9 +229,10 @@ void setup() {
 
   Serial.println("Commands:");
   Serial.println("  z : set all current positions as 0 deg");
-  Serial.println("  n : set calibration point");
-  Serial.println("      SPLAY current position = +10 deg");
-  Serial.println("      MCP/PIP/DIP current position = +90 deg");
+  Serial.println("  s : set SPLAY current position as +10 deg");
+  Serial.println("  m : set MCP current position as +90 deg");
+  Serial.println("  p : set PIP current position as +90 deg");
+  Serial.println("  d : set DIP current position as +90 deg");
   Serial.println();
 }
 
@@ -254,28 +263,42 @@ void loop() {
       }
       Serial.println();
     }
+    else if (c == 's') {
+      uint16_t w_now = spiRead16(CS_PINS[0]);
+      w_cal[0] = w_now;
+      haveCal[0] = true;
 
-    else if (c == 'n') {
-      readAllEncoders(w);
-
-      for (int i = 0; i < NUM_ENC; i++) {
-        w_cal[i] = w[i];
-      }
-
-      haveCal = true;
-
-      Serial.println("Set calibration point for all encoders:");
-      for (int i = 0; i < NUM_ENC; i++) {
-        Serial.print("  ");
-        Serial.print(ENC_NAMES[i]);
-        Serial.print(" CAL W=0x");
-        Serial.print(w_cal[i], HEX);
-        Serial.print(" -> ");
-        Serial.print(CAL_TARGET_DEG[i], 1);
-        Serial.println(" deg");
-      }
-      Serial.println();
+      Serial.print("Set SPLAY calibration at +10 deg, W=0x");
+      Serial.println(w_cal[0], HEX);
     }
+
+    else if (c == 'm') {
+      uint16_t w_now = spiRead16(CS_PINS[1]);
+      w_cal[1] = w_now;
+      haveCal[1] = true;
+
+      Serial.print("Set MCP calibration at +90 deg, W=0x");
+      Serial.println(w_cal[1], HEX);
+    }
+
+    else if (c == 'p') {
+      uint16_t w_now = spiRead16(CS_PINS[2]);
+      w_cal[2] = w_now;
+      haveCal[2] = true;
+
+      Serial.print("Set PIP calibration at +90 deg, W=0x");
+      Serial.println(w_cal[2], HEX);
+    }
+
+    else if (c == 'd') {
+      uint16_t w_now = spiRead16(CS_PINS[3]);
+      w_cal[3] = w_now;
+      haveCal[3] = true;
+
+      Serial.print("Set DIP calibration at +90 deg, W=0x");
+      Serial.println(w_cal[3], HEX);
+    }
+
   }
 
   // Read all encoders
