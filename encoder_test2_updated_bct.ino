@@ -55,6 +55,15 @@ const float CAL_TARGET_DEG[NUM_ENC] = {
   90.0f   // DIP
 };
 
+// ===================== WMA Filter Variables =====================
+const int WMA_WINDOW = 20;
+
+float WMA_WEIGHTS[WMA_WINDOW];
+float WMA_WEIGHT_SUM = 0.0;
+
+float angleHistory[NUM_ENC][WMA_WINDOW] = {0};
+bool firstRead[NUM_ENC] = {true, true, true, true};
+
 // ===================== SPI functions =====================
 
 uint16_t spiTransfer16(int csPin, uint16_t data) {
@@ -205,6 +214,33 @@ float computeJointDeg(int i, uint16_t w_now) {
   return jointDeg;
 }
 
+float computeWMA(int encIdx, float newAngle) {
+  // If this is the first time reading, fill the entire history buffer
+  // with the first value so the filter doesn't slowly ramp up from 0
+  if (firstRead[encIdx]) {
+    for (int i = 0; i < WMA_WINDOW; i++) {
+      angleHistory[encIdx][i] = newAngle;
+    }
+    firstRead[encIdx] = false;
+  } else {
+    // Shift history to the right (oldest data at the end is overwritten)
+    for (int i = WMA_WINDOW - 1; i > 0; i--) {
+      angleHistory[encIdx][i] = angleHistory[encIdx][i - 1];
+    }
+    // Insert new reading at the beginning (index 0 is the newest data)
+    angleHistory[encIdx][0] = newAngle;
+  }
+
+  // Calculate the weighted sum
+  float wma = 0;
+  for (int i = 0; i < WMA_WINDOW; i++) {
+    wma += angleHistory[encIdx][i] * WMA_WEIGHTS[i];
+  }
+
+  // Divide by total weight to get the final averaged degree
+  return wma / WMA_WEIGHT_SUM;
+}
+
 // ===================== Setup =====================
 
 void setup() {
@@ -216,6 +252,11 @@ void setup() {
   for (int i = 0; i < NUM_ENC; i++) {
     pinMode(CS_PINS[i], OUTPUT);
     digitalWrite(CS_PINS[i], HIGH);
+  }
+
+  for (int i = 0; i < WMA_WINDOW; i++) {
+    WMA_WEIGHTS[i] = (float)(WMA_WINDOW - i);
+    WMA_WEIGHT_SUM += WMA_WEIGHTS[i];
   }
 
   Serial.println("4-Encoder SPI angle test + BCT");
@@ -305,24 +346,41 @@ void loop() {
   readAllEncoders(w);
 
   // Print one line for all 4 encoders
+  // for (int i = 0; i < NUM_ENC; i++) {
+  //   float jointDeg = computeJointDeg(i, w[i]);
+
+  //   Serial.print(ENC_NAMES[i]);
+  //   Serial.print("_W=0x");
+  //   Serial.print(w[i], HEX);
+
+  //   Serial.print(" ");
+  //   Serial.print(ENC_NAMES[i]);
+  //   Serial.print("_Deg=");
+  //   Serial.print(jointDeg, 2);
+
+  //   if (i < NUM_ENC - 1) {
+  //     Serial.print(" | ");
+  //   }
+  // }
+
   for (int i = 0; i < NUM_ENC; i++) {
     float jointDeg = computeJointDeg(i, w[i]);
+    float wmaDeg = computeWMA(i, jointDeg);
 
     Serial.print(ENC_NAMES[i]);
-    Serial.print("_W=0x");
-    Serial.print(w[i], HEX);
-
-    Serial.print(" ");
-    Serial.print(ENC_NAMES[i]);
-    Serial.print("_Deg=");
+    Serial.print("_Raw:");
     Serial.print(jointDeg, 2);
+    Serial.print(",");
+    
+    Serial.print(ENC_NAMES[i]);
+    Serial.print("_WMA:");
+    Serial.print(wmaDeg, 2);
 
     if (i < NUM_ENC - 1) {
-      Serial.print(" | ");
+      Serial.print(",");
     }
   }
 
   Serial.println();
-
   delay(PERIOD_MS);
 }
