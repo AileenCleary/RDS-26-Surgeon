@@ -14,6 +14,8 @@ const int CS_PINS[NUM_ENC] = {
   37   // JENC4_CS = DIP
 };
 
+const int FORCE_PIN = A0;
+
 const char* ENC_NAMES[NUM_ENC] = {
   "SPLAY",
   "MCP",
@@ -32,7 +34,11 @@ const uint8_t REG_BCT = 0x02;       // BCT[7:0]
 const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
 
 // Initial value to try. Also test 0, 86, 129, 155, 172.
-const uint8_t BCT_VALUE = 96;
+const uint8_t SPLAY_BCT_VALUE = 50;
+const uint8_t MCP_BCT_VALUE = 95;
+const uint8_t PIP_BCT_VALUE = 105;
+const uint8_t DIP_BCT_VALUE = 98;
+const uint8_t BCT_VALUES[NUM_ENC] = {SPLAY_BCT_VALUE, MCP_BCT_VALUE, PIP_BCT_VALUE, DIP_BCT_VALUE};
 
 // Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
 const bool TRIM_X = true;
@@ -92,6 +98,11 @@ void readAllEncoders(uint16_t w[NUM_ENC]) {
   }
 }
 
+void readForceSensor(int forcePin) {
+  int forceAnalog = analogRead(forcePin);
+
+}
+
 // MA782 write register:
 // first 16-bit frame: [100][5-bit register address][8-bit value]
 // second 16-bit frame: 0x0000, returns register value in low 8 bits
@@ -130,13 +141,19 @@ void setBCTForAllEncoders() {
   }
 
   Serial.println("Setting BCT for all MA782 encoders...");
-  Serial.print("BCT_VALUE = ");
-  Serial.println(BCT_VALUE);
+  Serial.print("SPLAY_BCT_VALUE = ");
+  Serial.println(SPLAY_BCT_VALUE);
+  Serial.print("MCP_BCT_VALUE = ");
+  Serial.println(MCP_BCT_VALUE);
+  Serial.print("PIP_BCT_VALUE = ");
+  Serial.println(PIP_BCT_VALUE);
+  Serial.print("DIP_BCT_VALUE = ");
+  Serial.println(DIP_BCT_VALUE);
   Serial.print("Trim register = 0x");
   Serial.println(trimReg, HEX);
 
   for (int i = 0; i < NUM_ENC; i++) {
-    uint8_t bctAck = ma782WriteRegister(CS_PINS[i], REG_BCT, BCT_VALUE);
+    uint8_t bctAck = ma782WriteRegister(CS_PINS[i], REG_BCT, BCT_VALUES[i]);
     delayMicroseconds(5);
 
     uint8_t trimAck = ma782WriteRegister(CS_PINS[i], REG_TRIM_DIR, trimReg);
@@ -345,24 +362,6 @@ void loop() {
   // Read all encoders
   readAllEncoders(w);
 
-  // Print one line for all 4 encoders
-  // for (int i = 0; i < NUM_ENC; i++) {
-  //   float jointDeg = computeJointDeg(i, w[i]);
-
-  //   Serial.print(ENC_NAMES[i]);
-  //   Serial.print("_W=0x");
-  //   Serial.print(w[i], HEX);
-
-  //   Serial.print(" ");
-  //   Serial.print(ENC_NAMES[i]);
-  //   Serial.print("_Deg=");
-  //   Serial.print(jointDeg, 2);
-
-  //   if (i < NUM_ENC - 1) {
-  //     Serial.print(" | ");
-  //   }
-  // }
-
   for (int i = 0; i < NUM_ENC; i++) {
     float jointDeg = computeJointDeg(i, w[i]);
     float wmaDeg = computeWMA(i, jointDeg);
@@ -376,10 +375,12 @@ void loop() {
     Serial.print("_WMA:");
     Serial.print(wmaDeg, 2);
 
-    if (i < NUM_ENC - 1) {
-      Serial.print(",");
-    }
+    Serial.print(",");
   }
+
+  int forceReading = analogRead(FORCE_PIN);
+  Serial.print("FORCE_RAW:");
+  Serial.println(forceReading);
 
   Serial.println();
   delay(PERIOD_MS);
