@@ -1,4 +1,13 @@
 #pragma once
+#include <FlexCAN_T4.h>
+
+#ifdef CAN_ERROR_BUS_OFF
+  #undef CAN_ERROR_BUS_OFF
+#endif
+
+#define IS_TEENSY_BUILTIN
+#include "ODriveCAN.h"
+#include "ODriveFlexCAN.hpp"
 
 const int NUM_ENC = 4;
 

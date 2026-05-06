@@ -21,6 +21,8 @@ void setup() {
 }
 
 void loop() {
+  pumpODriveCAN();
+  
   // 1. Process incoming commands from the user/PC
   handleCommand();
   

@@ -1,135 +1,195 @@
-#include <FlexCAN_T4.h>
-
-// Config
+// ==============================================================================
+// CONFIGURATION
+// ==============================================================================
 const int NUM_MOTORS = 5;
-const uint32_t CAN_BAUDRATE  = 250000;
-const uint8_t ODRV0_NODE_IDS[NUM_MOTORS] = {0, 1, 2, 3, 4};
+const uint32_t CAN_BAUDRATE = 250000;
 
-// ODrive CAN Simple Command IDs
-const uint32_t CMD_SET_AXIS_STATE = 0x07;
-const uint32_t CMD_SET_CONTROLLER_MODE = 0x0B;
-const uint32_t CMD_SET_INPUT_POS = 0x0C;
-const uint32_t CMD_SET_LIMITS = 0x0F;
-const uint32_t CMD_SET_POS_GAIN = 0x01A;
-const uint32_t CMD_SET_VEL_GAINS = 0x01B;
+// Hardware Limits 
+const float VEL_LIMIT_TURNS_S = 10.0f;
+const float I_SOFT_A = 3.0f;
 
 // Gains
-const float POS_GAIN = 0.2f;
+const float POS_GAIN = 5.0f;
 const float VEL_GAIN = 0.01f;
-const float VEL_INT_GAIN = 0.0f;
+const float VEL_INT_GAIN = 0.02f;
 
-// Constraints
-const float MAX_TORQUE = 0.05; // N-m
-const float MAX_POWER = 100; // W
-const float MOTOR_KT = 0.049f;  // Nm/A (From Motor KV = 167.5)
-const float LIMIT_CURRENT = MAX_TORQUE / MOTOR_KT;
-const float MAX_POWER_PER_MOTOR = MAX_POWER / 3;  // max motors used at a time
-const float MAX_VEL_RAD_S = MAX_POWER_PER_MOTOR / MAX_TORQUE;
-const float LIMIT_VELOCITY = MAX_VEL_RAD_S / (2.0f * PI);
-
-// Can Object
+// ==============================================================================
+// ODRIVE OBJECTS & CAN SETUP
+// ==============================================================================
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 
-// Setup function
-void setupODrive() {
-  can1.begin();
-  can1.setBaudRate(CAN_BAUDRATE);
-  delay(3000);
+ODriveCAN odrv0(wrap_can_intf(can1), 0);
+ODriveCAN odrv1(wrap_can_intf(can1), 1);
+ODriveCAN odrv2(wrap_can_intf(can1), 2);
+ODriveCAN odrv3(wrap_can_intf(can1), 3);
+ODriveCAN odrv4(wrap_can_intf(can1), 4);
 
-  Serial.println("Initializing ODrives...");
-  
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    uint32_t id = ODRV0_NODE_IDS[i];
-    sendCANFloat(id, CMD_SET_POS_GAIN, POS_GAIN);
-    sendCANFloatFloat(id, CMD_SET_VEL_GAINS, VEL_GAIN, VEL_INT_GAIN);
-    sendCANFloatFloat(id, CMD_SET_LIMITS, LIMIT_VELOCITY, LIMIT_CURRENT);
-    sendCANIntInt(id, CMD_SET_CONTROLLER_MODE, 3, 1);
-    sendCANInt(id, CMD_SET_AXIS_STATE, 8);
-    delay(50); 
-  }
-  Serial.println("All 5 ODrives set to Closed Loop Position Control.");
+ODriveCAN* odrives[NUM_MOTORS] = { &odrv0, &odrv1, &odrv2, &odrv3, &odrv4 };
+
+struct ODriveUserData {
+  Heartbeat_msg_t last_heartbeat;
+  bool received_heartbeat = false;
+  Get_Encoder_Estimates_msg_t last_feedback;
+  bool received_feedback = false;
+};
+ODriveUserData odrive_data[NUM_MOTORS];
+
+// ==============================================================================
+// CALLBACKS
+// ==============================================================================
+void onHeartbeat(Heartbeat_msg_t& msg, void* user_data) {
+  auto* ud = static_cast<ODriveUserData*>(user_data);
+  ud->last_heartbeat = msg;
+  ud->received_heartbeat = true;
 }
 
-// Functions to move individual motors
+void onFeedback(Get_Encoder_Estimates_msg_t& msg, void* user_data) {
+  auto* ud = static_cast<ODriveUserData*>(user_data);
+  ud->last_feedback = msg;
+  ud->received_feedback = true;
+}
+
+void onCanMessage(const CAN_message_t& msg) {
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    onReceive(msg, *odrives[i]);
+  }
+}
+
+// Helper to keep the CAN bus flowing
+void pumpODriveCAN() {
+  pumpEvents(can1);
+}
+
+// ==============================================================================
+// MAIN FUNCTIONS
+// ==============================================================================
+
+void setupODrive() {
+  Serial.println("\n--- Initializing CAN Bus ---");
+  can1.begin();
+  can1.setBaudRate(CAN_BAUDRATE);
+  can1.setMaxMB(16);
+  can1.enableFIFO();
+  can1.enableFIFOInterrupt();
+  can1.onReceive(onCanMessage);
+
+  // Attach callbacks for all motors
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    odrives[i]->onStatus(onHeartbeat, &odrive_data[i]);
+    odrives[i]->onFeedback(onFeedback, &odrive_data[i]);
+  }
+
+  // 1. INDEFINITE WAIT FOR MOTORS THAT ARE BEING TESTED
+  for (int i = 0; i < 2; i++) {
+    Serial.printf("Waiting for ODrive Node %d heartbeat (Teensy will wait here until ODrive boots)...\n", i);
+    while (!odrive_data[i].received_heartbeat) {
+      pumpODriveCAN();
+      delay(10);
+    }
+    Serial.printf("Node %d Heartbeat OK! ODrive is awake.\n", i);
+  }
+
+  // 2. CHECK FOR OTHER MOTORS
+  Serial.println("Checking for other connected ODrives (Waiting 2 seconds)...");
+  unsigned long t0 = millis();
+  while(millis() - t0 < 2000) {
+    pumpODriveCAN();
+    delay(5);
+  }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (odrive_data[i].received_heartbeat) {
+      Serial.printf("Node %d is ALIVE.\n", i);
+    } else {
+      Serial.printf("Node %d is NOT CONNECTED (Skipping).\n", i);
+    }
+  }
+
+  // 3. CONFIGURE AND REQUEST CLOSED LOOP
+  Serial.println("Configuring Connected ODrives for Closed Loop Control...");
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) continue; // Skip missing motors
+    
+    odrives[i]->clearErrors();
+    delay(10);
+    odrives[i]->setControllerMode(CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_PASSTHROUGH);
+    odrives[i]->setLimits(VEL_LIMIT_TURNS_S, I_SOFT_A);
+    odrives[i]->setPosGain(POS_GAIN);
+    odrives[i]->setVelGains(VEL_GAIN, VEL_INT_GAIN);
+    delay(10);
+    
+    odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+  }
+
+  // 4. VERIFY CLOSED LOOP STATE
+  Serial.println("Verifying Axis States...");
+  t0 = millis();
+  while (millis() - t0 < 1000) {
+    pumpODriveCAN();
+    delay(5);
+  }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) continue;
+    
+    uint8_t state = odrive_data[i].last_heartbeat.Axis_State;
+    uint32_t err = odrive_data[i].last_heartbeat.Axis_Error;
+    
+    if (state == AXIS_STATE_CLOSED_LOOP_CONTROL && err == 0) {
+      Serial.printf("✅ Node %d entered CLOSED LOOP.\n", i);
+    } else {
+      Serial.printf("❌ Node %d REJECTED Closed Loop! State: %d | Error: 0x%08X\n", i, state, err);
+    }
+  }
+  
+  Serial.println("--- ODrive Setup Complete --- \n");
+}
+
+// ==============================================================================
+// MOVEMENT COMMANDS
+// ==============================================================================
+
+void moveMotors(float angles[5]) {
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    // Prevent sending commands to unplugged motors to keep the CAN bus clean
+    if (!odrive_data[i].received_heartbeat) continue; 
+    
+    float turns = angles[i] / 360.0f;
+    odrives[i]->setPosition(turns, 0.0f, 0.0f);
+  }
+}
+
 void moveSplay(float angle) {
-  float turns = angle / 360.0f;
-  sendCANPosition(ODRV0_NODE_IDS[0], turns, 0.0f, 0.0f);
+  if (odrive_data[0].received_heartbeat) {
+    float turns = angle / 360.0f;
+    odrv0.setPosition(turns, 0.0f, 0.0f);
+  }
 }
 
 void moveMCPFlex(float angle) {
-  float turns = angle / 360.0f;
-  sendCANPosition(ODRV0_NODE_IDS[1], turns, 0.0f, 0.0f);
-}
-
-void moveMCPExt(float angle) {
-  float turns = angle / 360.0f;
-  sendCANPosition(ODRV0_NODE_IDS[2], turns, 0.0f, 0.0f);
-}
-
-void movePIPFlex(float angle) {
-  float turns = angle / 360.0f;
-  sendCANPosition(ODRV0_NODE_IDS[3], turns, 0.0f, 0.0f);
-}
-
-void movePIPExt(float angle) {
-  float turns = angle / 360.0f;
-  sendCANPosition(ODRV0_NODE_IDS[4], turns, 0.0f, 0.0f);
-}
-
-// Function to move all 5 motors based on an array of angles in degrees
-void moveMotors(float angles[5]) {
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    float turns = angles[i] / 360.0f;
-    sendCANPosition(ODRV0_NODE_IDS[i], turns, 0.0f, 0.0f);
+  if (odrive_data[1].received_heartbeat) {
+    float turns = angle / 360.0f;
+    odrv1.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
-// CAN Helper functions
-void sendCANPosition(uint32_t node, float pos, float vel_ff, float torque_ff) {
-  CAN_message_t msg;
-  msg.id = (node << 5) | CMD_SET_INPUT_POS;
-  msg.len = 8;
-  
-  int16_t v_ff = (int16_t)(vel_ff * 1000.0f);
-  int16_t t_ff = (int16_t)(torque_ff * 1000.0f);
-  
-  memcpy(&msg.buf[0], &pos, 4);
-  memcpy(&msg.buf[4], &v_ff, 2);
-  memcpy(&msg.buf[6], &t_ff, 2);
-  
-  can1.write(msg);
+void moveMCPExt(float angle) {
+  if (odrive_data[2].received_heartbeat) {
+    float turns = angle / 360.0f;
+    odrv2.setPosition(turns, 0.0f, 0.0f);
+  }
 }
 
-void sendCANFloatFloat(uint32_t node, uint32_t cmd_id, float val1, float val2) {
-  CAN_message_t msg;
-  msg.id = (node << 5) | cmd_id;
-  msg.len = 8;
-  memcpy(&msg.buf[0], &val1, 4);
-  memcpy(&msg.buf[4], &val2, 4);
-  can1.write(msg);
+void movePIPFlex(float angle) {
+  if (odrive_data[3].received_heartbeat) {
+    float turns = angle / 360.0f;
+    odrv3.setPosition(turns, 0.0f, 0.0f);
+  }
 }
 
-void sendCANFloat(uint32_t node, uint32_t cmd_id, float val1) {
-  CAN_message_t msg;
-  msg.id = (node << 5) | cmd_id;
-  msg.len = 8;
-  memcpy(&msg.buf[0], &val1, 4);
-  can1.write(msg);
-}
-
-void sendCANIntInt(uint32_t node, uint32_t cmd_id, int32_t val1, int32_t val2) {
-  CAN_message_t msg;
-  msg.id = (node << 5) | cmd_id;
-  msg.len = 8;
-  memcpy(&msg.buf[0], &val1, 4);
-  memcpy(&msg.buf[4], &val2, 4);
-  can1.write(msg);
-}
-
-void sendCANInt(uint32_t node, uint32_t cmd_id, int32_t val1) {
-  CAN_message_t msg;
-  msg.id = (node << 5) | cmd_id;
-  msg.len = 4;
-  memcpy(&msg.buf[0], &val1, 4);
-  can1.write(msg);
+void movePIPExt(float angle) {
+  if (odrive_data[4].received_heartbeat) {
+    float turns = angle / 360.0f;
+    odrv4.setPosition(turns, 0.0f, 0.0f);
+  }
 }

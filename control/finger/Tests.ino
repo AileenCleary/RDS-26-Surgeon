@@ -24,14 +24,19 @@ void testSingleMotor(int motorIndex) {
     case 0:
       Serial.printf("\n--- TESTING SPLAY MOTOR ---\n");
       Serial.println("Moving +15 degrees...");
-      moveSplay(15.0f); delay(1000);
-      moveSplay(-15.0f); delay(1000);
+      moveSplay(15.0f);
+      delay(1000);
+      Serial.println("Moving -15 degrees...");
+      moveSplay(-15.0f);
+      delay(1000);
       break;
     case 1:
       Serial.printf("\n--- TESTING MCP FLEX MOTOR ---\n");
       Serial.println("Moving +15 degrees...");
-      moveMCPFlex(15.0f); delay(1000);
-      moveMCPFlex(-15.0f); delay(1000);
+      moveMCPFlex(15.0f);
+      delay(1000);
+      moveMCPFlex(-15.0f);
+      delay(1000);
       break;
     case 2:
       Serial.printf("\n--- TESTING MCP EXT MOTOR ---\n");
