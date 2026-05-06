@@ -5,13 +5,17 @@ const int NUM_MOTORS = 5;
 const uint32_t CAN_BAUDRATE = 250000;
 
 // Hardware Limits 
-const float VEL_LIMIT_TURNS_S = 10.0f;
-const float I_SOFT_A = 3.0f;
+const float VEL_LIMIT_TURNS_S = 100.0f;
+const float I_SOFT_A = 2.63f;
 
 // Gains
 const float POS_GAIN = 5.0f;
 const float VEL_GAIN = 0.01f;
-const float VEL_INT_GAIN = 0.02f;
+const float VEL_INT_GAIN = 0.0f;
+
+// Conversion & Offsets
+const float DEGREES_PER_TURN = 14.12f;
+float motor_zero_offsets[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 // ==============================================================================
 // ODRIVE OBJECTS & CAN SETUP
@@ -90,7 +94,7 @@ void setupODrive() {
   }
 
   // 2. CHECK FOR OTHER MOTORS
-  Serial.println("Checking for other connected ODrives (Waiting 2 seconds)...");
+  Serial.println("Checking for other connected ODrives (Waiting 5 seconds)...");
   unsigned long t0 = millis();
   while(millis() - t0 < 5000) {
     pumpODriveCAN();
@@ -105,7 +109,29 @@ void setupODrive() {
     }
   }
 
-  // 3. CONFIGURE AND REQUEST CLOSED LOOP
+  // 3. CAPTURE STARTING POSITIONS AS RELATIVE ZERO
+  Serial.println("Waiting for initial encoder feedback to set zero offsets...");
+  t0 = millis();
+  while (millis() - t0 < 2000) {
+    pumpODriveCAN();
+    bool all_ready = true;
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      if (odrive_data[i].received_heartbeat && !odrive_data[i].received_feedback) {
+        all_ready = false;
+      }
+    }
+    if (all_ready) break;
+    delay(5);
+  }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (odrive_data[i].received_feedback) {
+      motor_zero_offsets[i] = odrive_data[i].last_feedback.Pos_Estimate;
+      Serial.printf("Node %d Zero Offset set to: %.4f turns\n", i, motor_zero_offsets[i]);
+    }
+  }
+
+  // 4. CONFIGURE AND REQUEST CLOSED LOOP
   Serial.println("Configuring Connected ODrives for Closed Loop Control...");
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!odrive_data[i].received_heartbeat) continue; // Skip missing motors
@@ -118,10 +144,14 @@ void setupODrive() {
     odrives[i]->setVelGains(VEL_GAIN, VEL_INT_GAIN);
     delay(10);
     
+    // Command the motor to strictly hold its current relative zero position before engaging
+    odrives[i]->setPosition(motor_zero_offsets[i], 0.0f, 0.0f);
+    delay(10);
+    
     odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
   }
 
-  // 4. VERIFY CLOSED LOOP STATE
+  // 5. VERIFY CLOSED LOOP STATE
   Serial.println("Verifying Axis States...");
   t0 = millis();
   while (millis() - t0 < 1000) {
@@ -151,45 +181,44 @@ void setupODrive() {
 
 void moveMotors(float angles[5]) {
   for (int i = 0; i < NUM_MOTORS; i++) {
-    // Prevent sending commands to unplugged motors to keep the CAN bus clean
     if (!odrive_data[i].received_heartbeat) continue; 
     
-    float turns = angles[i] / 360.0f;
+    float turns = motor_zero_offsets[i] + (angles[i] / DEGREES_PER_TURN);
     odrives[i]->setPosition(turns, 0.0f, 0.0f);
   }
 }
 
 void moveSplay(float angle) {
   if (odrive_data[0].received_heartbeat) {
-    float turns = angle / 360.0f;
+    float turns = motor_zero_offsets[0] + (angle / DEGREES_PER_TURN);
     odrv0.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
 void moveMCPFlex(float angle) {
   if (odrive_data[1].received_heartbeat) {
-    float turns = angle / 360.0f;
+    float turns = motor_zero_offsets[1] + (angle / DEGREES_PER_TURN);
     odrv1.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
 void moveMCPExt(float angle) {
   if (odrive_data[2].received_heartbeat) {
-    float turns = angle / 360.0f;
+    float turns = motor_zero_offsets[2] + (angle / DEGREES_PER_TURN);
     odrv2.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
 void movePIPFlex(float angle) {
   if (odrive_data[3].received_heartbeat) {
-    float turns = angle / 360.0f;
+    float turns = motor_zero_offsets[3] + (angle / DEGREES_PER_TURN);
     odrv3.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
 void movePIPExt(float angle) {
   if (odrive_data[4].received_heartbeat) {
-    float turns = angle / 360.0f;
+    float turns = motor_zero_offsets[4] + (angle / DEGREES_PER_TURN);
     odrv4.setPosition(turns, 0.0f, 0.0f);
   }
 }
