@@ -16,7 +16,7 @@ const float VEL_INT_GAIN = 0.02f;
 // ==============================================================================
 // ODRIVE OBJECTS & CAN SETUP
 // ==============================================================================
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> can1;
 
 ODriveCAN odrv0(wrap_can_intf(can1), 0);
 ODriveCAN odrv1(wrap_can_intf(can1), 1);
@@ -80,7 +80,7 @@ void setupODrive() {
   }
 
   // 1. INDEFINITE WAIT FOR MOTORS THAT ARE BEING TESTED
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 1; i++) {
     Serial.printf("Waiting for ODrive Node %d heartbeat (Teensy will wait here until ODrive boots)...\n", i);
     while (!odrive_data[i].received_heartbeat) {
       pumpODriveCAN();
@@ -92,7 +92,7 @@ void setupODrive() {
   // 2. CHECK FOR OTHER MOTORS
   Serial.println("Checking for other connected ODrives (Waiting 2 seconds)...");
   unsigned long t0 = millis();
-  while(millis() - t0 < 2000) {
+  while(millis() - t0 < 5000) {
     pumpODriveCAN();
     delay(5);
   }

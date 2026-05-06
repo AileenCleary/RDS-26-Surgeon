@@ -145,7 +145,9 @@ void handleCommand() {
     else if (cmd == "TEST ENCODERS") {
       testJointSensors();
     }
-    else {
+    else if (cmd == "TEST DEMO") {
+      testDemo();
+    } else {
       // Parse individual motor test (e.g., "TEST MOTOR 2")
       int mIdx;
       if (sscanf(cmd.c_str(), "TEST MOTOR %d", &mIdx) == 1) {

@@ -179,3 +179,14 @@ void testJointSensors() {
   }
   Serial.println("Encoder Test Complete.");
 }
+
+void testDemo() {
+  Serial.println("\n--- TESTING DEMO (SPLAY STEP) (10 s) ---\n");
+  for (int i = 0; i < 10; i++) {
+    odrv0.setPosition(2.0, 0.0f, 0.0f);
+    delay(1000);
+    odrv0.setPosition(-2.0, 0.0f, 0.0f);
+    delay(1000);
+  }
+  Serial.println("Demo Test Complete.");
+}
