@@ -29,11 +29,11 @@ const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 const uint8_t REG_BCT = 0x02;       // BCT[7:0]
 const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
 
-// Initial value to try. Also test 0, 86, 129, 155, 172.
-const uint8_t SPLAY_BCT_VALUE = 118;
-const uint8_t MCP_BCT_VALUE = 108;
-const uint8_t PIP_BCT_VALUE = 108;
-const uint8_t DIP_BCT_VALUE = 98;
+// Test [0, 86, 129, 155, 172, 184, 194, 201, 207]
+const uint8_t SPLAY_BCT_VALUE = 0;
+const uint8_t MCP_BCT_VALUE = 0;
+const uint8_t PIP_BCT_VALUE = 0;
+const uint8_t DIP_BCT_VALUE = 0;
 const uint8_t BCT_VALUES[NUM_ENC] = {SPLAY_BCT_VALUE, MCP_BCT_VALUE, PIP_BCT_VALUE, DIP_BCT_VALUE};
 
 // Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.

@@ -84,7 +84,7 @@ void setupODrive() {
   }
 
   // 1. INDEFINITE WAIT FOR MOTORS THAT ARE BEING TESTED
-  for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < NUM_MOTORS; i++) {
     Serial.printf("Waiting for ODrive Node %d heartbeat (Teensy will wait here until ODrive boots)...\n", i);
     while (!odrive_data[i].received_heartbeat) {
       pumpODriveCAN();

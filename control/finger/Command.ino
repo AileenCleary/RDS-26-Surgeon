@@ -4,8 +4,8 @@ void handleCommand() {
   if (!Serial.available()) return;
 
   String cmd = Serial.readStringUntil('\n');
-  cmd.trim(); // Remove whitespace/newlines
-  cmd.toUpperCase(); // Make parsing case-insensitive
+  cmd.trim(); 
+  cmd.toUpperCase(); 
 
   if (cmd == "STOP") {
     currentMode = MODE_IDLE;
@@ -13,116 +13,91 @@ void handleCommand() {
     return;
   }
 
-  // Buffers for parsing
   float v0, v1, v2, v3, v4; 
   char type[10];
   
   // ---------------------------------------------------------
-  // 1. MOVE COMMANDS (Single point)
-  // Format: MOVE <LEVEL> <V0> <V1> <V2> ...
+  // 1. MOVE COMMANDS (Single point, held by PID)
   // ---------------------------------------------------------
   if (cmd.startsWith("MOVE ")) {
-    currentMode = MODE_IDLE; // Stop any active sine waves
-    
     if (sscanf(cmd.c_str(), "MOVE TIP %f %f %f", &v0, &v1, &v2) == 3) {
+      currentMode = MODE_CONTROL_TIP;
       currentTipTarget[0] = v0; currentTipTarget[1] = v1; currentTipTarget[2] = v2;
-      
-      float jointsOut[4], motorsOut[5];
-      calculateJointAngles(currentTipTarget, jointsOut);
-      calculateMotorAngles(jointsOut, motorsOut);
-      moveMotors(motorsOut);
-      Serial.printf("ACK: Moved TIP to %.1f, %.1f, %.1f\n", v0, v1, v2);
+      Serial.printf("ACK: Moving TIP to %.1f, %.1f, %.1f\n", v0, v1, v2);
     } 
     else if (sscanf(cmd.c_str(), "MOVE JOINT %f %f %f %f", &v0, &v1, &v2, &v3) == 4) {
+      currentMode = MODE_CONTROL_JOINT;
       currentJointTarget[0] = v0; currentJointTarget[1] = v1; 
       currentJointTarget[2] = v2; currentJointTarget[3] = v3;
-      
-      float motorsOut[5];
-      calculateMotorAngles(currentJointTarget, motorsOut);
-      moveMotors(motorsOut);
-      Serial.printf("ACK: Moved JOINTS to %.1f, %.1f, %.1f, %.1f\n", v0, v1, v2, v3);
+      Serial.printf("ACK: Moving JOINTS to %.1f, %.1f, %.1f, %.1f\n", v0, v1, v2, v3);
     }
     else if (sscanf(cmd.c_str(), "MOVE MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {
+      currentMode = MODE_CONTROL_MOTOR;
       currentMotorTarget[0] = v0; currentMotorTarget[1] = v1; currentMotorTarget[2] = v2; 
       currentMotorTarget[3] = v3; currentMotorTarget[4] = v4;
-      
-      moveMotors(currentMotorTarget);
-      Serial.println("ACK: Moved MOTORS directly.");
+      Serial.println("ACK: Moving MOTORS directly.");
     }
   }
   
   // ---------------------------------------------------------
   // 2. SINE COMMANDS (Continuous path)
-  // Format: SINE <LEVEL> <AXIS_IDX> <AMPLITUDE> <FREQUENCY> <OFFSET>
   // ---------------------------------------------------------
   else if (cmd.startsWith("SINE ")) {
     int axis;
     if (sscanf(cmd.c_str(), "SINE %s %d %f %f %f", type, &axis, &v0, &v1, &v2) == 5) {
-      sineAxis = axis;
-      sineAmp = v0;
-      sineFreq = v1;
-      sineOffset = v2;
+      sineAxis = axis; sineAmp = v0; sineFreq = v1; sineOffset = v2;
       motionStartTime = millis();
       
-      if (strcmp(type, "TIP") == 0) currentMode = MODE_SINE_TIP;
-      else if (strcmp(type, "JOINT") == 0) currentMode = MODE_SINE_JOINT;
-      else if (strcmp(type, "MOTOR") == 0) currentMode = MODE_SINE_MOTOR;
+      if (strcmp(type, "TIP") == 0) { currentMode = MODE_SINE_TIP; }
+      else if (strcmp(type, "JOINT") == 0) { currentMode = MODE_SINE_JOINT; }
+      else if (strcmp(type, "MOTOR") == 0) { currentMode = MODE_SINE_MOTOR; }
       
-      Serial.printf("ACK: Started SINE on %s axis %d (Amp:%.1f, Freq:%.1f, Offset:%.1f)\n", type, axis, v0, v1, v2);
+      Serial.printf("ACK: Started SINE on %s axis %d\n", type, axis);
     }
   }
 
   // ---------------------------------------------------------
-  // 3. TRAJECTORY STREAMING (Fast passthrough from Python script)
-  // Format: TRAJ <LEVEL> <V0> <V1> ...
+  // 3. TRAJECTORY STREAMING (Continuous path from PC)
   // ---------------------------------------------------------
   else if (cmd.startsWith("TRAJ ")) {
-    currentMode = MODE_TRAJ_STREAMING;
-    // Fast path calculation without printing ACKs back to Serial to avoid bottlenecking
-
     if (sscanf(cmd.c_str(), "TRAJ TIP %f %f %f", &v0, &v1, &v2) == 3) {
-      float dynamicTip[3] = {v0, v1, v2};
-      float jointsOut[4], motorsOut[5];
-      calculateJointAngles(dynamicTip, jointsOut);
-      calculateMotorAngles(jointsOut, motorsOut);
-      moveMotors(motorsOut);
+      currentMode = MODE_TRAJ_STREAMING_TIP;
+      currentTipTarget[0] = v0; currentTipTarget[1] = v1; currentTipTarget[2] = v2;
     } 
     else if (sscanf(cmd.c_str(), "TRAJ JOINT %f %f %f %f", &v0, &v1, &v2, &v3) == 4) {
-      float dynamicJoints[4] = {v0, v1, v2, v3};
-      float motorsOut[5];
-      calculateMotorAngles(dynamicJoints, motorsOut);
-      moveMotors(motorsOut);
+      currentMode = MODE_TRAJ_STREAMING_JOINT;
+      currentJointTarget[0] = v0; currentJointTarget[1] = v1; currentJointTarget[2] = v2; currentJointTarget[3] = v3;
     }
     else if (sscanf(cmd.c_str(), "TRAJ MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {
-      float dynamicMotors[5] = {v0, v1, v2, v3, v4};
-      moveMotors(dynamicMotors);
+      currentMode = MODE_TRAJ_STREAMING_MOTOR;
+      currentMotorTarget[0] = v0; currentMotorTarget[1] = v1; currentMotorTarget[2] = v2; currentMotorTarget[3] = v3; currentMotorTarget[4] = v4;
     }
   }
+  
+  // ---------------------------------------------------------
+  // 4. SETTINGS & TESTS
+  // ---------------------------------------------------------
   else if (cmd == "PID ON") {
     feedbackEnabled = true;
-    resetPIDs(); // Crucial: clear old integral windup before starting
+    resetPIDs(); 
     Serial.println("ACK: Feedback PID Control ENABLED.");
   }
   else if (cmd == "PID OFF") {
     feedbackEnabled = false;
     Serial.println("ACK: Feedback PID Control DISABLED.");
   }
-  // Format: TUNE PID <AXIS_IDX> <P> <I> <D>
   else if (cmd.startsWith("TUNE PID ")) {
-    int axis; 
-    float p, i, d;
+    int axis; float p, i, d;
     if (sscanf(cmd.c_str(), "TUNE PID %d %f %f %f", &axis, &p, &i, &d) == 4) {
       if (axis >= 0 && axis < 3) {
-        jointPIDs[axis].Kp = p;
-        jointPIDs[axis].Ki = i;
-        jointPIDs[axis].Kd = d;
+        jointPIDs[axis].Kp = p; jointPIDs[axis].Ki = i; jointPIDs[axis].Kd = d;
         jointPIDs[axis].reset();
         Serial.printf("ACK: Tuned PID Axis %d to P:%.3f I:%.4f D:%.3f\n", axis, p, i, d);
       }
     }
   }
   else if (cmd.startsWith("TEST ")) {
-    currentMode = MODE_IDLE; // Ensure any background motion is safely stopped
+    currentMode = MODE_IDLE;
     
     if (cmd == "TEST MOTORS") {
       testAllMotorsTogether();
@@ -147,6 +122,18 @@ void handleCommand() {
     }
     else if (cmd == "TEST DEMO") {
       testDemo();
+    }
+    else if (cmd == "TEST LINEARITY SPLAY") {
+      testLinearitySplay();
+    }
+    else if (cmd == "TEST LINEARITY MCP") {
+      testLinearityMCP();
+    }
+    else if (cmd == "TEST LINEARITY PIP") {
+      testLinearityPIP();
+    }
+    else if (cmd == "TEST LINEARITY DIP") {
+      testLinearityDIP();
     } else {
       // Parse individual motor test (e.g., "TEST MOTOR 2")
       int mIdx;
