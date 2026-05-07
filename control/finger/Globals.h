@@ -80,3 +80,7 @@ struct PIDController {
 
 extern bool feedbackEnabled;
 extern PIDController jointPIDs[3];
+
+// ODrive State Management
+void enableSingleMotor(int targetIdx);
+void enableAllMotors();

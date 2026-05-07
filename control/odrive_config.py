@@ -49,7 +49,7 @@ odrv0.spi_encoder0.config.singleturn_bits = 16
 # Enable CAN Bus
 odrv0.can.config.protocol = ODrive.Protocol.SIMPLE
 odrv0.can.config.baud_rate = 250000
-odrv0.axis0.config.can.node_id = 0
+odrv0.axis0.config.can.node_id = 2
 odrv0.axis0.config.can.heartbeat_msg_rate_ms = 100
 odrv0.axis0.config.can.encoder_msg_rate_ms = 10
 odrv0.axis0.config.can.temperature_msg_rate_ms = 1000
@@ -86,15 +86,14 @@ if odrv0.axis0.active_errors != 0:
     exit()
 
 # Enter closed-loop control
-print("Calibration successful. Entering closed-loop control...")
-odrv0.axis0.requested_state = ODrive.AxisState.CLOSED_LOOP_CONTROL
-time.sleep(0.5)
-print("Commanding motor to spin at 1 turn/s...")
-odrv0.axis0.controller.input_vel = 1.0
-time.sleep(3)
-print("Commanding motor to stop...")
-odrv0.axis0.controller.input_vel = 0.0
-time.sleep(0.5)
-print("Releasing motor (Returning to IDLE)...")
-odrv0.axis0.requested_state = ODrive.AxisState.IDLE
-print("Test complete!")
+print("Calibration successful. Saving configuration...")
+try:
+    odrv0.save_configuration()
+except Exception:
+    print("USB disconnected during flash save (This is normal!)")
+print("Rebooting...")
+try:
+    odrv0.reboot()
+except Exception:
+    print("ODrive rebooting...")
+print("Configuration complete!")

@@ -180,76 +180,86 @@ void testJointSensors() {
   Serial.println("Encoder Test Complete.");
 }
 
+// void testDemo() {
+//   Serial.println("\n--- TESTING DEMO (SPLAY CLOSED-LOOP STEP) (10 s) ---");
+
+//   // 1. Enable global feedback and clear any old PID memory
+//   feedbackEnabled = true;
+//   resetPIDs(); 
+
+//   unsigned long startTime = millis();
+//   unsigned long stepTimer = millis();
+//   unsigned long lastLoopTime = micros();
+
+//   float target_splay_deg = 10.0f; // Start with +10 deg step
+
+//   // Run the test for exactly 10 seconds
+//   while (millis() - startTime < 10000) {
+//     unsigned long currentMillis = millis();
+
+//     // 2. Step the target every 2 seconds
+//     if (currentMillis - stepTimer >= 2000) {
+//       target_splay_deg = -target_splay_deg; // Toggle between +10 and -10
+//       stepTimer = currentMillis;
+//     }
+
+//     // 3. Read the actual joint angle from the MA782 sensors
+//     handleCommandMA782(); 
+//     float* thetaList = getJointAngles(); 
+//     float current_splay_deg = thetaList[0]; // Index 0 is Splay
+
+//     // 4. Calculate dt
+//     float dt = (micros() - lastLoopTime) / 1000000.0f;
+//     if (dt <= 0.0001f) dt = 0.001f; // Prevent divide by zero
+//     lastLoopTime = micros();
+
+//     // 5. Calculate PID Correction using jointPIDs[0]
+//     float error = target_splay_deg - current_splay_deg;
+    
+//     // Note: Adjust the struct variable names below if they differ in your Globals.h
+//     jointPIDs[0].integral += error * dt;
+//     float d_error = (error - jointPIDs[0].prevError) / dt;
+    
+//     float pid_correction_deg = (jointPIDs[0].Kp * error) + 
+//                                (jointPIDs[0].Ki * jointPIDs[0].integral) + 
+//                                (jointPIDs[0].Kd * d_error);
+                               
+//     // Apply safety clamp so the PID doesn't rip the tendon if a sensor fails
+//     if (pid_correction_deg > jointPIDs[0].outputLimit) pid_correction_deg = jointPIDs[0].outputLimit;
+//     if (pid_correction_deg < -jointPIDs[0].outputLimit) pid_correction_deg = -jointPIDs[0].outputLimit;
+    
+//     jointPIDs[0].prevError = error;
+
+//     // 6. Apply correction to the target and feed it to the Kinematics engine
+//     float commanded_splay = target_splay_deg + pid_correction_deg;
+    
+//     // Use the joint control command as requested
+//     moveJointsSafely(commanded_splay, 0.0f, 0.0f);
+//     pumpODriveCAN(); 
+
+//     // 7. Print directly to Serial Plotter format
+//     Serial.print("Target:");
+//     Serial.print(target_splay_deg);
+//     Serial.print(","); // Comma separates the variables
+//     Serial.print("Actual:");
+//     Serial.println(current_splay_deg);
+
+//     delay(10); // Loop at roughly 100Hz
+//   }
+
+//   Serial.println("Demo Test Complete. Returning to Zero.");
+//   feedbackEnabled = false; // Turn off feedback for safety
+//   resetToZero();
+// }
+
 void testDemo() {
   Serial.println("\n--- TESTING DEMO (SPLAY CLOSED-LOOP STEP) (10 s) ---");
-
-  // 1. Enable global feedback and clear any old PID memory
-  feedbackEnabled = true;
-  resetPIDs(); 
-
-  unsigned long startTime = millis();
-  unsigned long stepTimer = millis();
-  unsigned long lastLoopTime = micros();
-
-  float target_splay_deg = 10.0f; // Start with +10 deg step
-
-  // Run the test for exactly 10 seconds
-  while (millis() - startTime < 10000) {
-    unsigned long currentMillis = millis();
-
-    // 2. Step the target every 2 seconds
-    if (currentMillis - stepTimer >= 2000) {
-      target_splay_deg = -target_splay_deg; // Toggle between +10 and -10
-      stepTimer = currentMillis;
-    }
-
-    // 3. Read the actual joint angle from the MA782 sensors
-    handleCommandMA782(); 
-    float* thetaList = getJointAngles(); 
-    float current_splay_deg = thetaList[0]; // Index 0 is Splay
-
-    // 4. Calculate dt
-    float dt = (micros() - lastLoopTime) / 1000000.0f;
-    if (dt <= 0.0001f) dt = 0.001f; // Prevent divide by zero
-    lastLoopTime = micros();
-
-    // 5. Calculate PID Correction using jointPIDs[0]
-    float error = target_splay_deg - current_splay_deg;
-    
-    // Note: Adjust the struct variable names below if they differ in your Globals.h
-    jointPIDs[0].integral += error * dt;
-    float d_error = (error - jointPIDs[0].prev_error) / dt;
-    
-    float pid_correction_deg = (jointPIDs[0].kp * error) + 
-                               (jointPIDs[0].ki * jointPIDs[0].integral) + 
-                               (jointPIDs[0].kd * d_error);
-                               
-    // Apply safety clamp so the PID doesn't rip the tendon if a sensor fails
-    if (pid_correction_deg > jointPIDs[0].max_correction) pid_correction_deg = jointPIDs[0].max_correction;
-    if (pid_correction_deg < -jointPIDs[0].max_correction) pid_correction_deg = -jointPIDs[0].max_correction;
-    
-    jointPIDs[0].prev_error = error;
-
-    // 6. Apply correction to the target and feed it to the Kinematics engine
-    float commanded_splay = target_splay_deg + pid_correction_deg;
-    
-    // Use the joint control command as requested
-    moveJointsSafely(commanded_splay, 0.0f, 0.0f);
-    pumpODriveCAN(); 
-
-    // 7. Print directly to Serial Plotter format
-    Serial.print("Target:");
-    Serial.print(target_splay_deg);
-    Serial.print(","); // Comma separates the variables
-    Serial.print("Actual:");
-    Serial.println(current_splay_deg);
-
-    delay(10); // Loop at roughly 100Hz
+  for (int i = 0; i < 10; i++) {
+    moveSplay(15.0f);
+    delay(1000);
+    moveSplay(-15.0f);
+    delay(1000);
   }
-
-  Serial.println("Demo Test Complete. Returning to Zero.");
-  feedbackEnabled = false; // Turn off feedback for safety
-  resetToZero();
 }
 
 void testLinearitySplay() {

@@ -222,3 +222,32 @@ void movePIPExt(float angle) {
     odrv4.setPosition(turns, 0.0f, 0.0f);
   }
 }
+
+void enableSingleMotor(int targetIdx) {
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) continue;
+    
+    if (i == targetIdx) {
+      // Ensure the target motor is awake and tracking
+      if (odrive_data[i].last_heartbeat.Axis_State != AXIS_STATE_CLOSED_LOOP_CONTROL) {
+        odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+      }
+    } else {
+      // Put all other motors to sleep (freewheeling/limp)
+      if (odrive_data[i].last_heartbeat.Axis_State != AXIS_STATE_IDLE) {
+        odrives[i]->setState(AXIS_STATE_IDLE);
+      }
+    }
+  }
+}
+
+void enableAllMotors() {
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) continue;
+    
+    // Wake up any motors that were previously put to sleep
+    if (odrive_data[i].last_heartbeat.Axis_State != AXIS_STATE_CLOSED_LOOP_CONTROL) {
+      odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+    }
+  }
+}

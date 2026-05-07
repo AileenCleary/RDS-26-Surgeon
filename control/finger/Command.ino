@@ -14,6 +14,7 @@ void handleCommand() {
   }
 
   float v0, v1, v2, v3, v4; 
+  int idx;
   char type[10];
   
   // ---------------------------------------------------------
@@ -21,21 +22,34 @@ void handleCommand() {
   // ---------------------------------------------------------
   if (cmd.startsWith("MOVE ")) {
     if (sscanf(cmd.c_str(), "MOVE TIP %f %f %f", &v0, &v1, &v2) == 3) {
+      enableAllMotors();
       currentMode = MODE_CONTROL_TIP;
       currentTipTarget[0] = v0; currentTipTarget[1] = v1; currentTipTarget[2] = v2;
       Serial.printf("ACK: Moving TIP to %.1f, %.1f, %.1f\n", v0, v1, v2);
     } 
     else if (sscanf(cmd.c_str(), "MOVE JOINT %f %f %f %f", &v0, &v1, &v2, &v3) == 4) {
+      enableAllMotors();
       currentMode = MODE_CONTROL_JOINT;
       currentJointTarget[0] = v0; currentJointTarget[1] = v1; 
       currentJointTarget[2] = v2; currentJointTarget[3] = v3;
       Serial.printf("ACK: Moving JOINTS to %.1f, %.1f, %.1f, %.1f\n", v0, v1, v2, v3);
     }
     else if (sscanf(cmd.c_str(), "MOVE MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {
+      enableAllMotors();
       currentMode = MODE_CONTROL_MOTOR;
       currentMotorTarget[0] = v0; currentMotorTarget[1] = v1; currentMotorTarget[2] = v2; 
       currentMotorTarget[3] = v3; currentMotorTarget[4] = v4;
       Serial.println("ACK: Moving MOTORS directly.");
+    }
+    else if (sscanf(cmd.c_str(), "MOVE MOTOR %d %f", &idx, &v0) == 2) {
+      if (idx >= 0 && idx < 5) {
+        enableSingleMotor(idx);
+        currentMode = MODE_CONTROL_MOTOR;
+        currentMotorTarget[idx] = v0; // Update only the specified motor
+        Serial.printf("ACK: Moving MOTOR %d to %.1f\n", idx, v0);
+      } else {
+        Serial.println("ERROR: Invalid motor index. Use 0-4.");
+      }
     }
   }
   
