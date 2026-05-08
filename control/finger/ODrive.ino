@@ -93,19 +93,26 @@ void setupODrive() {
     Serial.printf("Node %d Heartbeat OK! ODrive is awake.\n", i);
   }
 
-  // 2. CHECK FOR OTHER MOTORS
-  Serial.println("Checking for other connected ODrives (Waiting 5 seconds)...");
-  unsigned long t0 = millis();
-  while(millis() - t0 < 5000) {
-    pumpODriveCAN();
-    delay(5);
-  }
+  // // 2. CHECK FOR OTHER MOTORS
+  // Serial.println("Checking for other connected ODrives (Waiting 5 seconds)...");
+  // unsigned long t0 = millis();
+  // while(millis() - t0 < 5000) {
+  //   pumpODriveCAN();
+  //   delay(5);
+  // }
 
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (odrive_data[i].received_heartbeat) {
       Serial.printf("Node %d is ALIVE.\n", i);
     } else {
       Serial.printf("Node %d is NOT CONNECTED (Skipping).\n", i);
+    }
+  }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (odrive_data[i].received_feedback) {
+      motor_zero_offsets[i] = odrive_data[i].last_feedback.Pos_Estimate;
+      Serial.printf("Node %d Zero Offset set to: %.4f turns\n", i, motor_zero_offsets[i]);
     }
   }
 
@@ -131,7 +138,7 @@ void setupODrive() {
 
   // 5. VERIFY CLOSED LOOP STATE
   Serial.println("Verifying Axis States...");
-  t0 = millis();
+  unsigned long t0 = millis();
   while (millis() - t0 < 1000) {
     pumpODriveCAN();
     delay(5);
@@ -202,6 +209,12 @@ void movePIPExt(float angle) {
 }
 
 void enableSingleMotor(int targetIdx) {
+  unsigned long t0 = millis();
+  while (millis() - t0 < 1000) {
+    pumpODriveCAN();
+    delay(5);
+  }
+  
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!odrive_data[i].received_heartbeat) continue;
     
@@ -220,6 +233,12 @@ void enableSingleMotor(int targetIdx) {
 }
 
 void enableAllMotors() {
+  unsigned long t0 = millis();
+  while (millis() - t0 < 1000) {
+    pumpODriveCAN();
+    delay(5);
+  }
+
   for (int i = 0; i < NUM_MOTORS; i++) {
     if (!odrive_data[i].received_heartbeat) continue;
     

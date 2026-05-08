@@ -8,41 +8,41 @@ const float L_PIP = 39.0f;
 const float L_DIP = 22.0f;
 
 // Joint Pulley Radii (mm)
-const float R_PULLEY_SPLAY_0 = 11.75f;
-const float R_PULLEY_SPLAY_1 = 6.4f;
-const float R_PULLEY_SPLAY_2 = 2.9f;
-const float R_PULLEY_MCP_0   = 12.4f;
-const float R_PULLEY_MCP_1   = 9.1f;
-const float R_PULLEY_MCP_2   = 6.35f;
-const float R_PULLEY_MCP_3   = 12.6f;
-const float R_PULLEY_PIP_0   = 6.35f;
-const float R_PULLEY_PIP_1   = 9.1f;
-const float R_PULLEY_DIP_0   = 9.0f;
+const float R_PULLEY_SPLAY = 9.0f;
+const float R_PULLEY_SPLAY_MCP = 6.4f;
+const float R_PULLEY_SPLAY_PIP = 2.9f;
+const float R_PULLEY_MCP_FLEX   = 12.4f;
+const float R_PULLEY_MCP_EXT   = 9.1f;
+const float R_PULLEY_MCP_PIP_FLEX   = 6.35f;
+const float R_PULLEY_MCP_PIP_EXT   = 12.6f;
+const float R_PULLEY_PIP   = 9.1f;
+const float R_PULLEY_PIP_DIP   = 6.35f;
+const float R_PULLEY_DIP   = 9.0f;
 
 // Motor Radii (mm) and direction
 const float R_MOTOR[5] = { 4.0f, 4.0f, 4.0f, 4.0f, 4.0f };
-const float MOTOR_DIR[5] = { 1.0f, 1.0f, -1.0f, 1.0f, -1.0f };
+const float MOTOR_DIR[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; // SPLAY, MCP_EXT, PIP_FLEX, PIP_EXT, MCP_FLEX
 
 // DIP Coupling Ratio
-const float DIP_COUPLING_RATIO = R_PULLEY_PIP_0 / R_PULLEY_DIP_0;
+const float DIP_COUPLING_RATIO = R_PULLEY_PIP_DIP / R_PULLEY_DIP;
 
 // Direction matrix
 const float D[5][3] = {
   {1.0f, 0.0f, 0.0f},
-  {1.0f, -1.0f, 0.0f},
-  {-1.0f, 1.0f,  0.0f},
-  {-1.0f, 1.0, -1.0f},
-  {1.0f, -1.0f, 1.0f}
+  {-1.0f, -1.0f,  0.0f},
+  {-1.0f, -1.0, 1.0f},
+  {1.0f, -1.0f, -1.0f},
+  {1.0f, 1.0f, 0.0f}
 };
 
 // Structure matrix
 const float S[5][3] = {
   // Splay              // MCP           // PIP
-  {  R_PULLEY_SPLAY_0,  0.0f,            0.0f }, // Motor/Tendon 0 (SPLAY)
-  {  R_PULLEY_SPLAY_1,  R_PULLEY_MCP_0,  0.0f }, // Motor/Tendon 1 (MCP Flexion)
-  {  R_PULLEY_SPLAY_1,  R_PULLEY_MCP_1,  0.0f }, // Motor/Tendon 2 (MCP Extension)
-  {  R_PULLEY_SPLAY_2,  R_PULLEY_MCP_2,  R_PULLEY_PIP_1 }, // Motor/Tendon 3 (PIP Flexion)
-  {  R_PULLEY_SPLAY_2,  R_PULLEY_MCP_3,  R_PULLEY_PIP_1 } // Motor/Tendon 4 (PIP Extension)
+  {  R_PULLEY_SPLAY,  0.0f,            0.0f }, // Motor/Tendon 0 (SPLAY)
+  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_EXT,  0.0f }, // Motor/Tendon 1 (MCP Extension)
+  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_FLEX,  R_PULLEY_PIP }, // Motor/Tendon 2 (PIP Flexion)
+  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_EXT,  R_PULLEY_PIP }, // Motor/Tendon 3 (PIP Extension)
+  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_FLEX,  0.0f } // Motor/Tendon 4 (MCP Flexion)
 };
 
 // Forward Kinematics

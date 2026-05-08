@@ -84,31 +84,22 @@ void testAllMotorsTogether() {
 // ==============================================================================
 void testJointSplay() {
   Serial.println("\n--- TESTING SPLAY JOINT ---\n");
-  Serial.println("Splaying +10 degrees...");
-  moveJointsSafely(10.0f, 0.0f, 0.0f); delay(1500);
-  
-  Serial.println("Splaying -10 degrees...");
-  moveJointsSafely(-10.0f, 0.0f, 0.0f); delay(1500);
+  Serial.println("Splaying +5 degrees...");
+  moveJointsSafely(10.0f, 0.0f, 0.0f); delay(5000);
   resetToZero();
 }
 
 void testJointMCP() {
   Serial.println("\n--- TESTING MCP JOINT ---\n");
   Serial.println("Flexing MCP to -45 degrees...");
-  moveJointsSafely(0.0f, -45.0f, 0.0f); delay(1500);
-  
-  Serial.println("Flexing MCP to -90 degrees...");
-  moveJointsSafely(0.0f, -90.0f, 0.0f); delay(1500);
+  moveJointsSafely(0.0f, -45.0f, 0.0f); delay(5000);
   resetToZero();
 }
 
 void testJointPIP() {
   Serial.println("\n--- TESTING PIP/DIP COUPLED JOINTS ---\n");
   Serial.println("Flexing PIP to -45 degrees (DIP will follow automatically)...");
-  moveJointsSafely(0.0f, 0.0f, -45.0f); delay(1500);
-  
-  Serial.println("Flexing PIP to -90 degrees...");
-  moveJointsSafely(0.0f, 0.0f, -90.0f); delay(1500);
+  moveJointsSafely(0.0f, 0.0f, -45.0f); delay(5000);
   resetToZero();
 }
 
@@ -173,7 +164,7 @@ void testJointSensors() {
   Serial.println("\n--- TESTING MA782 ENCODERS (10 Samples) ---\n");
   for (int i = 0; i < 100; i++) {
     handleCommandMA782(); // Ensure registers are updated before reading
-    float* thetaList = getJointAngles();
+    getJointAngles();
     printJointAngles();
     delay(200);
   }
@@ -273,12 +264,12 @@ void testLinearitySplay() {
   bool previousFeedbackState = feedbackEnabled;
   feedbackEnabled = false; 
 
-  float start_deg = -20.0f;
+  float start_deg = 0.0f;
   float end_deg = 20.0f;
   float sweep_time_sec = 10.0f; // 10 seconds for a slow, high-resolution sweep
   
   // 2. Move to the starting position and let it settle
-  Serial.println("Moving to start position (-20 deg)...");
+  Serial.println("Moving to start position (0 deg)...");
   moveJointsSafely(start_deg, 0.0f, 0.0f);
   
   // Wait 2 seconds, giving you time to open the Serial Plotter
@@ -286,6 +277,8 @@ void testLinearitySplay() {
   delay(2000); 
 
   unsigned long startTime = millis();
+
+  Serial.println("START_DATA");
   
   // 3. Execute the linear sweep
   while (true) {
@@ -301,15 +294,16 @@ void testLinearitySplay() {
     
     // Read the actual MA782 sensor
     handleCommandMA782(); 
-    float* thetaList = getJointAngles();
-    float sensor_deg = thetaList[2]; // Raw counts from the sensor
-
+    uint16_t* rawList = getJointReadings(); 
+    uint16_t sensor_raw = rawList[0];
     
-    // Output clean CSV: Time, Expected Angle, Sensor Angle
-    Serial.printf("%.3f,%.2f,%.2f\n", t, current_expected_deg, sensor_deg);
+    // Output clean CSV: Time, Expected Angle, Raw Sensor Counts
+    Serial.printf("%.3f,%.2f,%u\n", t, current_expected_deg, sensor_raw);
     
     delay(20); // 50 Hz update rate for a smooth graph
   }
+
+  Serial.println("END_DATA");
   
   Serial.println("Linearity Test Complete. Returning to Zero.");
   resetToZero();
@@ -324,65 +318,51 @@ void testLinearityMCP() {
   bool previousFeedbackState = feedbackEnabled;
   feedbackEnabled = false; 
 
-  float start_mcp_ext_deg = 0.0f;
-  float end_mcp_ext_deg = 30.0f;
-  float start_pip_flex_deg = 0.0f;
-  float end_pip_flex_deg = 110.0f;
-  float start_mcp_flex_deg = 0.0f;
-  float end_mcp_flex_deg = 60.0f;
-  float start_pip_ext_deg = 0.0f;
-  float end_pip_ext_deg = -100.0f;
-  float sweep_time_sec = 10.0f; 
-  float start_deg = 0.0;
-  float end_deg = -80.0;
+  float start_deg = 0.0f;
+  float end_deg = -60.0f;
+  float sweep_time_sec = 10.0f; // 10 seconds for a slow, high-resolution sweep
   
-  Serial.println("Moving to start position...");
-  moveMCPExt(start_mcp_ext_deg);
-  movePIPFlex(start_pip_flex_deg);
-  moveMCPFlex(start_mcp_flex_deg);
-  movePIPExt(start_pip_ext_deg);
+  // 2. Move to the starting position and let it settle
+  Serial.println("Moving to start position (0 deg)...");
+  moveJointsSafely(0.0f, start_deg, 0.0f);
   
-  // Give the user time to start the Python script
-  Serial.println("Ready. Start the Python plotting script now!");
-  delay(1000); 
+  // Wait 2 seconds, giving you time to open the Serial Plotter
+  Serial.println("Starting Sweep in 2 seconds... Open Serial Plotter NOW!");
+  delay(2000); 
 
   unsigned long startTime = millis();
-  
-  // Send a signal to Python that the data is starting
+
   Serial.println("START_DATA");
   
+  // 3. Execute the linear sweep
   while (true) {
     float t = (millis() - startTime) / 1000.0f;
     if (t > sweep_time_sec) break;
     
-    float current_mcp_ext_expected_deg = start_mcp_ext_deg + ((end_mcp_ext_deg - start_mcp_ext_deg) * (t / sweep_time_sec));
-    float current_pip_flex_expected_deg = start_pip_flex_deg + ((end_pip_flex_deg - start_pip_flex_deg) * (t / sweep_time_sec));
-    float current_mcp_flex_expected_deg = start_mcp_flex_deg + ((end_mcp_flex_deg - start_mcp_flex_deg) * (t / sweep_time_sec));
-    float current_pip_ext_expected_deg = start_pip_ext_deg + ((end_pip_ext_deg - start_pip_ext_deg) * (t / sweep_time_sec));
+    // Calculate the perfectly linear expected angle
     float current_expected_deg = start_deg + ((end_deg - start_deg) * (t / sweep_time_sec));
     
-    moveMCPExt(current_mcp_ext_expected_deg);
-    movePIPFlex(current_pip_flex_expected_deg);
-    moveMCPFlex(current_mcp_flex_expected_deg);
-    movePIPExt(current_pip_ext_expected_deg);
+    // Command the motor (Open-loop via Kinematics)
+    moveJointsSafely(0.0f, current_expected_deg, 0.0f);
     pumpODriveCAN(); 
     
+    // Read the actual MA782 sensor
     handleCommandMA782(); 
-    float* thetaList = getJointAngles();
-    float sensor_deg = thetaList[1]; // Raw counts from the sensor
-
+    uint16_t* rawList = getJointReadings(); 
+    uint16_t sensor_raw = rawList[1];
     
-    // Output clean CSV: Time, Expected Angle, Sensor Angle
-    Serial.printf("%.3f,%.2f,%.2f\n", t, current_expected_deg, sensor_deg);
+    // Output clean CSV: Time, Expected Angle, Raw Sensor Counts
+    Serial.printf("%.3f,%.2f,%u\n", t, current_expected_deg, sensor_raw);
     
-    delay(20); 
+    delay(20); // 50 Hz update rate for a smooth graph
   }
-  
-  // Tell Python the sweep is done
+
   Serial.println("END_DATA");
   
   Serial.println("Linearity Test Complete. Returning to Zero.");
   resetToZero();
+  
+  // Restore the PID to whatever state the user had it in previously
   feedbackEnabled = previousFeedbackState; 
 }
 
@@ -392,55 +372,51 @@ void testLinearityPIP() {
   bool previousFeedbackState = feedbackEnabled;
   feedbackEnabled = false; 
 
-  float start_mcp_ext_deg = 0.0f;
-  float end_mcp_ext_deg = -120.0f;
-  float start_pip_flex_deg = 0.0f;
-  float end_pip_flex_deg = 140.0f;
-  float sweep_time_sec = 10.0f; 
-  float start_deg = 0.0;
-  float end_deg = -60.0;
+  float start_deg = 0.0f;
+  float end_deg = -90.0f;
+  float sweep_time_sec = 10.0f; // 10 seconds for a slow, high-resolution sweep
   
-  Serial.println("Moving to start position...");
-  moveMCPExt(start_mcp_ext_deg);
-  movePIPFlex(start_pip_flex_deg);
+  // 2. Move to the starting position and let it settle
+  Serial.println("Moving to start position (0 deg)...");
+  moveJointsSafely(0.0f, 0.0f, start_deg);
   
-  // Give the user time to start the Python script
-  Serial.println("Ready. Start the Python plotting script now!");
-  delay(1000); 
+  // Wait 2 seconds, giving you time to open the Serial Plotter
+  Serial.println("Starting Sweep in 2 seconds... Open Serial Plotter NOW!");
+  delay(2000); 
 
   unsigned long startTime = millis();
-  
-  // Send a signal to Python that the data is starting
+
   Serial.println("START_DATA");
   
+  // 3. Execute the linear sweep
   while (true) {
     float t = (millis() - startTime) / 1000.0f;
     if (t > sweep_time_sec) break;
     
-    float current_mcp_ext_expected_deg = start_mcp_ext_deg + ((end_mcp_ext_deg - start_mcp_ext_deg) * (t / sweep_time_sec));
-    float current_pip_flex_expected_deg = start_pip_flex_deg + ((end_pip_flex_deg - start_pip_flex_deg) * (t / sweep_time_sec));
+    // Calculate the perfectly linear expected angle
     float current_expected_deg = start_deg + ((end_deg - start_deg) * (t / sweep_time_sec));
     
-    moveMCPExt(current_mcp_ext_expected_deg);
-    movePIPFlex(current_pip_flex_expected_deg);
+    // Command the motor (Open-loop via Kinematics)
+    moveJointsSafely(0.0f, 0.0f, current_expected_deg);
     pumpODriveCAN(); 
     
+    // Read the actual MA782 sensor
     handleCommandMA782(); 
-    float* thetaList = getJointAngles();
-    float sensor_deg = thetaList[2]; // Raw counts from the sensor
-
+    uint16_t* rawList = getJointReadings(); 
+    uint16_t sensor_raw = rawList[2];
     
-    // Output clean CSV: Time, Expected Angle, Sensor Angle
-    Serial.printf("%.3f,%.2f,%.2f\n", t, current_expected_deg, sensor_deg);
+    // Output clean CSV: Time, Expected Angle, Raw Sensor Counts
+    Serial.printf("%.3f,%.2f,%u\n", t, current_expected_deg, sensor_raw);
     
-    delay(20); 
+    delay(20); // 50 Hz update rate for a smooth graph
   }
-  
-  // Tell Python the sweep is done
+
   Serial.println("END_DATA");
   
   Serial.println("Linearity Test Complete. Returning to Zero.");
   resetToZero();
+  
+  // Restore the PID to whatever state the user had it in previously
   feedbackEnabled = previousFeedbackState; 
 }
 
@@ -450,54 +426,51 @@ void testLinearityDIP() {
   bool previousFeedbackState = feedbackEnabled;
   feedbackEnabled = false; 
 
-  float start_mcp_ext_deg = 0.0f;
-  float end_mcp_ext_deg = -160.0f;
-  float start_pip_flex_deg = 0.0f;
-  float end_pip_flex_deg = 80.0f;
-  float sweep_time_sec = 10.0f; 
-  float start_deg = 0.0;
-  float end_deg = -40.0;
+  float start_deg = 0.0f;
+  float end_deg = -90.0f;
+  float sweep_time_sec = 10.0f; // 10 seconds for a slow, high-resolution sweep
   
-  Serial.println("Moving to start position...");
-  moveMCPExt(start_mcp_ext_deg);
-  movePIPFlex(start_pip_flex_deg);
+  // 2. Move to the starting position and let it settle
+  Serial.println("Moving to start position (0 deg)...");
+  moveJointsSafely(0.0f, 0.0f, start_deg);
   
-  // Give the user time to start the Python script
-  Serial.println("Ready. Start the Python plotting script now!");
-  delay(1000); 
+  // Wait 2 seconds, giving you time to open the Serial Plotter
+  Serial.println("Starting Sweep in 2 seconds... Open Serial Plotter NOW!");
+  delay(2000); 
 
   unsigned long startTime = millis();
-  
-  // Send a signal to Python that the data is starting
+
   Serial.println("START_DATA");
   
+  // 3. Execute the linear sweep
   while (true) {
     float t = (millis() - startTime) / 1000.0f;
     if (t > sweep_time_sec) break;
     
-    float current_mcp_ext_expected_deg = start_mcp_ext_deg + ((end_mcp_ext_deg - start_mcp_ext_deg) * (t / sweep_time_sec));
-    float current_pip_flex_expected_deg = start_pip_flex_deg + ((end_pip_flex_deg - start_pip_flex_deg) * (t / sweep_time_sec));
-    float current_expected_deg = start_deg + ((end_deg - start_deg) * (t / sweep_time_sec));
+    // Calculate the perfectly linear expected angle
+    float current_expected_deg_pip = (start_deg + ((end_deg - start_deg) * (t / sweep_time_sec)));
+    float current_expected_deg_dip = current_expected_deg_pip * 6.35 / 9.0;
     
-    moveMCPExt(current_mcp_ext_expected_deg);
-    movePIPFlex(current_pip_flex_expected_deg);
+    // Command the motor (Open-loop via Kinematics)
+    moveJointsSafely(0.0f, 0.0f, current_expected_deg_pip);
     pumpODriveCAN(); 
     
+    // Read the actual MA782 sensor
     handleCommandMA782(); 
-    float* thetaList = getJointAngles();
-    float sensor_deg = thetaList[3]; // Raw counts from the sensor
-
+    uint16_t* rawList = getJointReadings(); 
+    uint16_t sensor_raw = rawList[3];
     
-    // Output clean CSV: Time, Expected Angle, Sensor Angle
-    Serial.printf("%.3f,%.2f,%.2f\n", t, current_expected_deg, sensor_deg);
+    // Output clean CSV: Time, Expected Angle, Raw Sensor Counts
+    Serial.printf("%.3f,%.2f,%u\n", t, current_expected_deg_dip, sensor_raw);
     
-    delay(20); 
+    delay(20); // 50 Hz update rate for a smooth graph
   }
-  
-  // Tell Python the sweep is done
+
   Serial.println("END_DATA");
   
   Serial.println("Linearity Test Complete. Returning to Zero.");
   resetToZero();
+  
+  // Restore the PID to whatever state the user had it in previously
   feedbackEnabled = previousFeedbackState;
 }

@@ -21,7 +21,7 @@ const char* ENC_NAMES[NUM_ENC] = {
   "DIP"
 };
 
-const uint32_t SPI_HZ = 100000;
+const uint32_t SPI_HZ = 1000000;
 const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 
 // MA782 BCT settings
@@ -44,8 +44,13 @@ const bool TRIM_Y = false;
 // bool haveZero = false;
 // bool haveCal[NUM_ENC] = {false, false, false, false};
 
-float w_zero[NUM_ENC] = {19302.0, 13453.0, 49382.0, 48443.0};
-float w_slope[NUM_ENC]  = {99.43, 533.1, 6.633, 81.20};
+float w_zero[NUM_ENC] = {20578.0, 59776.0, 51920.0, 53864.0};
+float w_slope[NUM_ENC]  = {75.17, 183.17, 103.53, 134.14};
+
+float COMP_A[NUM_ENC]     = {1.801, 19.840, 10.338, 3.118}; 
+float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 5.62, -50.33};
+float COMP_OFFSET[NUM_ENC] = {-0.157, -16.217, 6.519, 2.281};
+
 uint16_t w[NUM_ENC];
 float jointDegs[NUM_ENC];
 float weightedJointDegs[NUM_ENC];
@@ -197,32 +202,9 @@ float countsToDeg(int i, uint16_t current_w) {
 }
 
 float computeJointDeg(int i, uint16_t w_now) {
-  // float deg_sensor = 0.0f;
-
-  // if (haveZero) {
-  //   deg_sensor = countsToDeg(diff16(w_now, w_zero[i]));
-  // }
-
-  // float jointDeg = deg_sensor;
-
-  // if (haveZero && haveCal[i]) {
-  //   float deg_cal_sensor = countsToDeg(diff16(w_cal[i], w_zero[i]));
-
-  //   if (fabs(deg_cal_sensor) > 5.0f) {
-  //     float scale = CAL_TARGET_DEG[i] / deg_cal_sensor;
-  //     jointDeg = scale * deg_sensor;
-  //   } else {
-  //     jointDeg = deg_sensor;
-
-  //     Serial.print("WARNING: ");
-  //     Serial.print(ENC_NAMES[i]);
-  //     Serial.print(" calibration span too small: ");
-  //     Serial.print(deg_cal_sensor, 3);
-  //     Serial.print(" deg. Using raw sensor angle. ");
-  //   }
-  // }
-  float jointDeg = countsToDeg(i, w_now);
-  return jointDeg;
+  float raw_deg = countsToDeg(i, w_now);
+  float corrected_deg = raw_deg + COMP_A[i] * sin((2.0 * raw_deg + COMP_PHASE[i]) * (PI / 180.0)) + COMP_OFFSET[i];
+  return corrected_deg;
 }
 
 float computeWMA(int encIdx, float newAngle) {

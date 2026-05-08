@@ -8,8 +8,8 @@ const float MAX_CORRECTION_DEG = 15.0f; // Never let the PID adjust a joint by m
 // Instantiate controllers for Splay (0), MCP (1), and PIP (2)
 PIDController jointPIDs[3] = {
   {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG},
-  {0.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG},
-  {0.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG}
+  {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG},
+  {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG}
 };
 
 void resetPIDs() {
