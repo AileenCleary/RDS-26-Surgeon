@@ -15,7 +15,7 @@ const float VEL_INT_GAIN = 0.0f;
 
 // Conversion & Offsets
 const float DEGREES_PER_TURN = 14.12f;
-float motor_zero_offsets[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float motor_zero_offsets[NUM_MOTORS] = {8.5593f, -3.7436f, -22.8087f, 1.648f, 0.3597f};
 
 // ==============================================================================
 // ODRIVE OBJECTS & CAN SETUP
@@ -106,28 +106,6 @@ void setupODrive() {
       Serial.printf("Node %d is ALIVE.\n", i);
     } else {
       Serial.printf("Node %d is NOT CONNECTED (Skipping).\n", i);
-    }
-  }
-
-  // 3. CAPTURE STARTING POSITIONS AS RELATIVE ZERO
-  Serial.println("Waiting for initial encoder feedback to set zero offsets...");
-  t0 = millis();
-  while (millis() - t0 < 2000) {
-    pumpODriveCAN();
-    bool all_ready = true;
-    for (int i = 0; i < NUM_MOTORS; i++) {
-      if (odrive_data[i].received_heartbeat && !odrive_data[i].received_feedback) {
-        all_ready = false;
-      }
-    }
-    if (all_ready) break;
-    delay(5);
-  }
-
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    if (odrive_data[i].received_feedback) {
-      motor_zero_offsets[i] = odrive_data[i].last_feedback.Pos_Estimate;
-      Serial.printf("Node %d Zero Offset set to: %.4f turns\n", i, motor_zero_offsets[i]);
     }
   }
 

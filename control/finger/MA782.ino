@@ -21,7 +21,7 @@ const char* ENC_NAMES[NUM_ENC] = {
   "DIP"
 };
 
-const uint32_t SPI_HZ = 1000000;
+const uint32_t SPI_HZ = 100000;
 const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 
 // MA782 BCT settings
@@ -31,33 +31,33 @@ const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
 
 // Test [0, 86, 129, 155, 172, 184, 194, 201, 207]
 const uint8_t SPLAY_BCT_VALUE = 0;
-const uint8_t MCP_BCT_VALUE = 0;
-const uint8_t PIP_BCT_VALUE = 0;
-const uint8_t DIP_BCT_VALUE = 0;
+const uint8_t MCP_BCT_VALUE = 230;
+const uint8_t PIP_BCT_VALUE = 230;
+const uint8_t DIP_BCT_VALUE = 100;
 const uint8_t BCT_VALUES[NUM_ENC] = {SPLAY_BCT_VALUE, MCP_BCT_VALUE, PIP_BCT_VALUE, DIP_BCT_VALUE};
 
 // Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
 const bool TRIM_X = true;
 const bool TRIM_Y = false;
 
-// Calibration variables
-bool haveZero = false;
-bool haveCal[NUM_ENC] = {false, false, false, false};
+// // Calibration variables
+// bool haveZero = false;
+// bool haveCal[NUM_ENC] = {false, false, false, false};
 
-uint16_t w_zero[NUM_ENC] = {0, 0, 0, 0};
-uint16_t w_cal[NUM_ENC]  = {0, 0, 0, 0};
+float w_zero[NUM_ENC] = {19302.0, 13453.0, 49382.0, 48443.0};
+float w_slope[NUM_ENC]  = {99.43, 533.1, 6.633, 81.20};
 uint16_t w[NUM_ENC];
 float jointDegs[NUM_ENC];
 float weightedJointDegs[NUM_ENC];
 
 // SPLAY: +10 deg
 // MCP/PIP/DIP: +90 deg
-const float CAL_TARGET_DEG[NUM_ENC] = {
-  10.0f,  // SPLAY
-  90.0f,  // MCP
-  90.0f,  // PIP
-  90.0f   // DIP
-};
+// const float CAL_TARGET_DEG[NUM_ENC] = {
+//   10.0f,  // SPLAY
+//   90.0f,  // MCP
+//   90.0f,  // PIP
+//   90.0f   // DIP
+// };
 
 // WMA Filter Variables
 const int WMA_WINDOW = 20;
@@ -189,36 +189,39 @@ int32_t diff16(uint16_t a, uint16_t b) {
   return d;
 }
 
-float countsToDeg(int32_t counts) {
-  return counts * (360.0f / 65536.0f);
+float countsToDeg(int i, uint16_t current_w) {
+  // Cast the float zero-point back to uint16_t for the diff calculation
+  int32_t raw_diff = diff16(current_w, (uint16_t)w_zero[i]);
+  
+  return (float)raw_diff / w_slope[i];
 }
 
 float computeJointDeg(int i, uint16_t w_now) {
-  float deg_sensor = 0.0f;
+  // float deg_sensor = 0.0f;
 
-  if (haveZero) {
-    deg_sensor = countsToDeg(diff16(w_now, w_zero[i]));
-  }
+  // if (haveZero) {
+  //   deg_sensor = countsToDeg(diff16(w_now, w_zero[i]));
+  // }
 
-  float jointDeg = deg_sensor;
+  // float jointDeg = deg_sensor;
 
-  if (haveZero && haveCal[i]) {
-    float deg_cal_sensor = countsToDeg(diff16(w_cal[i], w_zero[i]));
+  // if (haveZero && haveCal[i]) {
+  //   float deg_cal_sensor = countsToDeg(diff16(w_cal[i], w_zero[i]));
 
-    if (fabs(deg_cal_sensor) > 5.0f) {
-      float scale = CAL_TARGET_DEG[i] / deg_cal_sensor;
-      jointDeg = scale * deg_sensor;
-    } else {
-      jointDeg = deg_sensor;
+  //   if (fabs(deg_cal_sensor) > 5.0f) {
+  //     float scale = CAL_TARGET_DEG[i] / deg_cal_sensor;
+  //     jointDeg = scale * deg_sensor;
+  //   } else {
+  //     jointDeg = deg_sensor;
 
-      Serial.print("WARNING: ");
-      Serial.print(ENC_NAMES[i]);
-      Serial.print(" calibration span too small: ");
-      Serial.print(deg_cal_sensor, 3);
-      Serial.print(" deg. Using raw sensor angle. ");
-    }
-  }
-
+  //     Serial.print("WARNING: ");
+  //     Serial.print(ENC_NAMES[i]);
+  //     Serial.print(" calibration span too small: ");
+  //     Serial.print(deg_cal_sensor, 3);
+  //     Serial.print(" deg. Using raw sensor angle. ");
+  //   }
+  // }
+  float jointDeg = countsToDeg(i, w_now);
   return jointDeg;
 }
 
@@ -270,7 +273,7 @@ void setupMA782() {
   Serial.println("JENC4 = DIP, range 0 to 90 deg");
   Serial.println();
 
-  setBCTForAllEncoders();
+  // setBCTForAllEncoders();
 
   Serial.println("Commands:");
   Serial.println("  z : set all current positions as 0 deg");
@@ -287,57 +290,51 @@ void handleCommandMA782() {
     char c = Serial.read();
 
     if (c == 'z') {
-      readAllEncoders(w);
+      // readAllEncoders(w);
 
-      for (int i = 0; i < NUM_ENC; i++) {
-        w_zero[i] = w[i];
-      }
-
-      haveZero = true;
-
-      Serial.println("Set ZERO for all encoders:");
-      for (int i = 0; i < NUM_ENC; i++) {
-        Serial.print("  ");
-        Serial.print(ENC_NAMES[i]);
-        Serial.print(" ZERO W=0x");
-        Serial.println(w_zero[i], HEX);
-      }
-      Serial.println();
+      // Serial.println("Set ZERO for all encoders:");
+      // for (int i = 0; i < NUM_ENC; i++) {
+      //   Serial.print("  ");
+      //   Serial.print(ENC_NAMES[i]);
+      //   Serial.print(" ZERO W=0x");
+      //   Serial.println(w_zero[i], HEX);
+      // }
+      // Serial.println();
     }
     else if (c == 's') {
-      uint16_t w_now = spiRead16(CS_PINS[0]);
-      w_cal[0] = w_now;
-      haveCal[0] = true;
+      // uint16_t w_now = spiRead16(CS_PINS[0]);
+      // w_cal[0] = w_now;
+      // haveCal[0] = true;
 
-      Serial.print("Set SPLAY calibration at +10 deg, W=0x");
-      Serial.println(w_cal[0], HEX);
+      // Serial.print("Set SPLAY calibration at +10 deg, W=0x");
+      // Serial.println(w_cal[0], HEX);
     }
 
     else if (c == 'm') {
-      uint16_t w_now = spiRead16(CS_PINS[1]);
-      w_cal[1] = w_now;
-      haveCal[1] = true;
+      // uint16_t w_now = spiRead16(CS_PINS[1]);
+      // w_cal[1] = w_now;
+      // haveCal[1] = true;
 
-      Serial.print("Set MCP calibration at +90 deg, W=0x");
-      Serial.println(w_cal[1], HEX);
+      // Serial.print("Set MCP calibration at +90 deg, W=0x");
+      // Serial.println(w_cal[1], HEX);
     }
 
     else if (c == 'p') {
-      uint16_t w_now = spiRead16(CS_PINS[2]);
-      w_cal[2] = w_now;
-      haveCal[2] = true;
+      // uint16_t w_now = spiRead16(CS_PINS[2]);
+      // w_cal[2] = w_now;
+      // haveCal[2] = true;
 
-      Serial.print("Set PIP calibration at +90 deg, W=0x");
-      Serial.println(w_cal[2], HEX);
+      // Serial.print("Set PIP calibration at +90 deg, W=0x");
+      // Serial.println(w_cal[2], HEX);
     }
 
     else if (c == 'd') {
-      uint16_t w_now = spiRead16(CS_PINS[3]);
-      w_cal[3] = w_now;
-      haveCal[3] = true;
+      // uint16_t w_now = spiRead16(CS_PINS[3]);
+      // w_cal[3] = w_now;
+      // haveCal[3] = true;
 
-      Serial.print("Set DIP calibration at +90 deg, W=0x");
-      Serial.println(w_cal[3], HEX);
+      // Serial.print("Set DIP calibration at +90 deg, W=0x");
+      // Serial.println(w_cal[3], HEX);
     }
   }
 }
@@ -356,12 +353,18 @@ float* getJointAngles() {
   return weightedJointDegs;
 }
 
+// Get raw joint readings
+uint16_t* getJointReadings() {
+  readAllEncoders(w);
+  return w;
+}
+
 // Print joint angles
 void printJointAngles() {
   for (int i = 0; i < NUM_ENC; i++) {
     Serial.print(ENC_NAMES[i]);
     Serial.print("_Raw:");
-    Serial.print(jointDegs[i], 2);
+    Serial.print(w[i]);
     Serial.print(",");
     
     Serial.print(ENC_NAMES[i]);
