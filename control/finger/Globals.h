@@ -10,10 +10,14 @@
 #include "ODriveFlexCAN.hpp"
 
 const int NUM_ENC = 4;
+float jointDegs[NUM_ENC];
+bool streamTelemetry = false;
+unsigned long streamStartTime = 0;
 
 // Control State Machine
 enum ControlMode {
   MODE_IDLE,
+  MODE_TEST,
   MODE_CONTROL_TIP,
   MODE_CONTROL_JOINT,
   MODE_CONTROL_MOTOR,
@@ -84,3 +88,4 @@ extern PIDController jointPIDs[3];
 // ODrive State Management
 void enableSingleMotor(int targetIdx);
 void enableAllMotors();
+void disableAllMotors();

@@ -8,19 +8,20 @@ const float L_PIP = 39.0f;
 const float L_DIP = 22.0f;
 
 // Joint Pulley Radii (mm)
-const float R_PULLEY_SPLAY = 9.0f;
-const float R_PULLEY_SPLAY_MCP = 6.4f;
-const float R_PULLEY_SPLAY_PIP = 2.9f;
-const float R_PULLEY_MCP_FLEX   = 12.4f;
-const float R_PULLEY_MCP_EXT   = 9.1f;
-const float R_PULLEY_MCP_PIP_FLEX   = 6.35f;
-const float R_PULLEY_MCP_PIP_EXT   = 12.6f;
-const float R_PULLEY_PIP   = 9.1f;
-const float R_PULLEY_PIP_DIP   = 6.35f;
-const float R_PULLEY_DIP   = 9.0f;
+const float R_TENDON = 0.2794f;
+const float R_PULLEY_SPLAY = 9.0f + R_TENDON;
+const float R_PULLEY_SPLAY_MCP = 6.4f + R_TENDON;
+const float R_PULLEY_SPLAY_PIP = 2.9f + R_TENDON;
+const float R_PULLEY_MCP_FLEX   = 12.4f + R_TENDON;
+const float R_PULLEY_MCP_EXT   = 9.1f + R_TENDON;
+const float R_PULLEY_MCP_PIP_FLEX   = 6.35f + R_TENDON;
+const float R_PULLEY_MCP_PIP_EXT   = 12.6f + R_TENDON;
+const float R_PULLEY_PIP   = 9.1f + R_TENDON;
+const float R_PULLEY_PIP_DIP   = 6.35f + R_TENDON;
+const float R_PULLEY_DIP   = 9.0f + R_TENDON;
 
 // Motor Radii (mm) and direction
-const float R_MOTOR[5] = { 4.0f, 4.0f, 4.0f, 4.0f, 4.0f };
+const float R_MOTOR[5] = { 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON };
 const float MOTOR_DIR[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; // SPLAY, MCP_EXT, PIP_FLEX, PIP_EXT, MCP_FLEX
 
 // DIP Coupling Ratio

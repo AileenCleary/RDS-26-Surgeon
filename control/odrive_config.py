@@ -31,7 +31,7 @@ odrv0.config.dc_max_negative_current = -0.5
 
 # Basic Motor Info
 odrv0.axis0.config.motor.motor_type = ODrive.MotorType.PMSM_CURRENT_CONTROL
-odrv0.axis0.config.motor.pole_pairs = 4
+odrv0.axis0.config.motor.pole_pairs = 8
 odrv0.axis0.config.motor.torque_constant = 0.057
 odrv0.axis0.config.motor.current_soft_max = 2.63
 odrv0.axis0.config.motor.calibration_current = 0.88

@@ -2,7 +2,7 @@
 
 // Settings
 const uint32_t UART_BAUDRATE = 115200;
-const uint32_t SENSOR_READ_PERIOD_MS = 20; // 50Hz sensor polling
+const uint32_t SENSOR_READ_PERIOD_MICROS = 1; // 1MHz sensor polling
 
 unsigned long lastSensorReadTime = 0;
 unsigned long lastMotionTime = 0;
@@ -34,12 +34,20 @@ void loop() {
   updateMotion(dt);
   
   // 3. Non-blocking sensor reads
-  unsigned long currentTime = millis();
-  if (currentTime - lastSensorReadTime >= SENSOR_READ_PERIOD_MS) {
-    lastSensorReadTime = currentTime;
-    
-    // Read and store sensor data (assuming these are defined in your sensor files)
-    handleCommandMA782();
-    // float force = getForce();
+  if (currentMicros - lastSensorReadTime >= SENSOR_READ_PERIOD_MICROS) {
+    lastSensorReadTime = currentMicros;
+    getJointAngles();
+    getForce();
+  }
+
+  if (streamTelemetry) {
+    static unsigned long lastStreamTime = 0;
+    if (millis() - lastStreamTime >= 20) { // 50Hz update rate
+      lastStreamTime = millis();
+      float t = (millis() - streamStartTime) / 1000.0f;
+      
+      // Output: Time, Target Angle, Actual Angle (Using PIP/Axis 2 as an example)
+      Serial.printf("%.3f,%.2f,%.2f\n", t, currentJointTarget[2], jointDegs[2]);
+    }
   }
 }

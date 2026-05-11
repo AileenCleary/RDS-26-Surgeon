@@ -1,5 +1,6 @@
 #include <SPI.h>
 #include <math.h>
+#include <queue>
 
 #include "Globals.h"
 
@@ -25,35 +26,33 @@ const uint32_t SPI_HZ = 1000000;
 const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 
 // MA782 BCT settings
+// const uint8_t REG_BCT = 0x02;       // BCT[7:0]
+// const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
 
-const uint8_t REG_BCT = 0x02;       // BCT[7:0]
-const uint8_t REG_TRIM_DIR = 0x03;  // bit0 = ETX, bit1 = ETY
+// // Test [0, 86, 129, 155, 172, 184, 194, 201, 207]
+// const uint8_t SPLAY_BCT_VALUE = 0;
+// const uint8_t MCP_BCT_VALUE = 230;
+// const uint8_t PIP_BCT_VALUE = 230;
+// const uint8_t DIP_BCT_VALUE = 100;
+// const uint8_t BCT_VALUES[NUM_ENC] = {SPLAY_BCT_VALUE, MCP_BCT_VALUE, PIP_BCT_VALUE, DIP_BCT_VALUE};
 
-// Test [0, 86, 129, 155, 172, 184, 194, 201, 207]
-const uint8_t SPLAY_BCT_VALUE = 0;
-const uint8_t MCP_BCT_VALUE = 230;
-const uint8_t PIP_BCT_VALUE = 230;
-const uint8_t DIP_BCT_VALUE = 100;
-const uint8_t BCT_VALUES[NUM_ENC] = {SPLAY_BCT_VALUE, MCP_BCT_VALUE, PIP_BCT_VALUE, DIP_BCT_VALUE};
-
-// Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
-const bool TRIM_X = true;
-const bool TRIM_Y = false;
+// // Try X first. If the linearity gets worse, switch to TRIM_X=false, TRIM_Y=true.
+// const bool TRIM_X = true;
+// const bool TRIM_Y = false;
 
 // // Calibration variables
 // bool haveZero = false;
 // bool haveCal[NUM_ENC] = {false, false, false, false};
 
-float w_zero[NUM_ENC] = {20578.0, 59776.0, 51920.0, 53864.0};
-float w_slope[NUM_ENC]  = {75.17, 183.17, 103.53, 134.14};
+float w_zero[NUM_ENC] = {20578.0, 61590.0, 51579.0, 53864.0};
+float w_slope[NUM_ENC]  = {75.17, 223.49, 91.74, 130.57};
 
-float COMP_A[NUM_ENC]     = {1.801, 19.840, 10.338, 3.118}; 
-float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 5.62, -50.33};
-float COMP_OFFSET[NUM_ENC] = {-0.157, -16.217, 6.519, 2.281};
+float COMP_A[NUM_ENC]     = {1.801, 19.840, 6.094, 3.118}; 
+float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 2.72, -50.33};
+float COMP_OFFSET[NUM_ENC] = {-0.157, -16.217, 3.863, 2.281};
 
 uint16_t w[NUM_ENC];
-float jointDegs[NUM_ENC];
-float weightedJointDegs[NUM_ENC];
+float averagedJointDegs[NUM_ENC];
 
 // SPLAY: +10 deg
 // MCP/PIP/DIP: +90 deg
@@ -65,13 +64,14 @@ float weightedJointDegs[NUM_ENC];
 // };
 
 // WMA Filter Variables
-const int WMA_WINDOW = 20;
+const int MA_WINDOW = 20;
 
-float WMA_WEIGHTS[WMA_WINDOW];
-float WMA_WEIGHT_SUM = 0.0;
+// float WMA_WEIGHTS[WMA_WINDOW];
+// float WMA_WEIGHT_SUMS[NUM_ENC] = {0.0, 0.0, 0.0, 0.0};
 
-float angleHistory[NUM_ENC][WMA_WINDOW] = {0};
-bool firstRead[NUM_ENC] = {true, true, true, true};
+std::queue<float> angleHistory[NUM_ENC];
+float MA_SUMS[NUM_ENC] = {0.0, 0.0, 0.0, 0.0};
+// bool firstRead[NUM_ENC] = {true, true, true, true};
 
 // SPI functions
 uint16_t spiTransfer16(int csPin, uint16_t data) {
@@ -126,57 +126,57 @@ uint8_t ma782ReadRegister(int csPin, uint8_t regAddr) {
   return resp & 0xFF;
 }
 
-void setBCTForAllEncoders() {
-  uint8_t trimReg = 0x00;
+// void setBCTForAllEncoders() {
+//   uint8_t trimReg = 0x00;
 
-  if (TRIM_X) {
-    trimReg |= 0x01;  // ETX = bit0
-  }
+//   if (TRIM_X) {
+//     trimReg |= 0x01;  // ETX = bit0
+//   }
 
-  if (TRIM_Y) {
-    trimReg |= 0x02;  // ETY = bit1
-  }
+//   if (TRIM_Y) {
+//     trimReg |= 0x02;  // ETY = bit1
+//   }
 
-  Serial.println("Setting BCT for all MA782 encoders...");
-  Serial.print("SPLAY_BCT_VALUE = ");
-  Serial.println(SPLAY_BCT_VALUE);
-  Serial.print("MCP_BCT_VALUE = ");
-  Serial.println(MCP_BCT_VALUE);
-  Serial.print("PIP_BCT_VALUE = ");
-  Serial.println(PIP_BCT_VALUE);
-  Serial.print("DIP_BCT_VALUE = ");
-  Serial.println(DIP_BCT_VALUE);
-  Serial.print("Trim register = 0x");
-  Serial.println(trimReg, HEX);
+//   Serial.println("Setting BCT for all MA782 encoders...");
+//   Serial.print("SPLAY_BCT_VALUE = ");
+//   Serial.println(SPLAY_BCT_VALUE);
+//   Serial.print("MCP_BCT_VALUE = ");
+//   Serial.println(MCP_BCT_VALUE);
+//   Serial.print("PIP_BCT_VALUE = ");
+//   Serial.println(PIP_BCT_VALUE);
+//   Serial.print("DIP_BCT_VALUE = ");
+//   Serial.println(DIP_BCT_VALUE);
+//   Serial.print("Trim register = 0x");
+//   Serial.println(trimReg, HEX);
 
-  for (int i = 0; i < NUM_ENC; i++) {
-    uint8_t bctAck = ma782WriteRegister(CS_PINS[i], REG_BCT, BCT_VALUES[i]);
-    delayMicroseconds(5);
+//   for (int i = 0; i < NUM_ENC; i++) {
+//     uint8_t bctAck = ma782WriteRegister(CS_PINS[i], REG_BCT, BCT_VALUES[i]);
+//     delayMicroseconds(5);
 
-    uint8_t trimAck = ma782WriteRegister(CS_PINS[i], REG_TRIM_DIR, trimReg);
-    delayMicroseconds(5);
+//     uint8_t trimAck = ma782WriteRegister(CS_PINS[i], REG_TRIM_DIR, trimReg);
+//     delayMicroseconds(5);
 
-    uint8_t bctRead = ma782ReadRegister(CS_PINS[i], REG_BCT);
-    delayMicroseconds(5);
+//     uint8_t bctRead = ma782ReadRegister(CS_PINS[i], REG_BCT);
+//     delayMicroseconds(5);
 
-    uint8_t trimRead = ma782ReadRegister(CS_PINS[i], REG_TRIM_DIR);
-    delayMicroseconds(5);
+//     uint8_t trimRead = ma782ReadRegister(CS_PINS[i], REG_TRIM_DIR);
+//     delayMicroseconds(5);
 
-    Serial.print("  ");
-    Serial.print(ENC_NAMES[i]);
-    Serial.print(" BCT ack=");
-    Serial.print(bctAck);
-    Serial.print(" read=");
-    Serial.print(bctRead);
+//     Serial.print("  ");
+//     Serial.print(ENC_NAMES[i]);
+//     Serial.print(" BCT ack=");
+//     Serial.print(bctAck);
+//     Serial.print(" read=");
+//     Serial.print(bctRead);
 
-    Serial.print(" | trim ack=0x");
-    Serial.print(trimAck, HEX);
-    Serial.print(" read=0x");
-    Serial.println(trimRead, HEX);
-  }
+//     Serial.print(" | trim ack=0x");
+//     Serial.print(trimAck, HEX);
+//     Serial.print(" read=0x");
+//     Serial.println(trimRead, HEX);
+//   }
 
-  Serial.println();
-}
+//   Serial.println();
+// }
 
 // Angle conversion
 // 16-bit wrap-around difference
@@ -207,31 +207,37 @@ float computeJointDeg(int i, uint16_t w_now) {
   return corrected_deg;
 }
 
-float computeWMA(int encIdx, float newAngle) {
+float computeMA(int encIdx, float newAngle) {
   // If this is the first time reading, fill the entire history buffer
   // with the first value so the filter doesn't slowly ramp up from 0
-  if (firstRead[encIdx]) {
-    for (int i = 0; i < WMA_WINDOW; i++) {
-      angleHistory[encIdx][i] = newAngle;
-    }
-    firstRead[encIdx] = false;
-  } else {
-    // Shift history to the right (oldest data at the end is overwritten)
-    for (int i = WMA_WINDOW - 1; i > 0; i--) {
-      angleHistory[encIdx][i] = angleHistory[encIdx][i - 1];
-    }
-    // Insert new reading at the beginning (index 0 is the newest data)
-    angleHistory[encIdx][0] = newAngle;
-  }
+  // if (firstRead[encIdx]) {
+  //   for (int i = 0; i < WMA_WINDOW; i++) {
+  //     angleHistory[encIdx][i] = newAngle;
+  //   }
+  //   firstRead[encIdx] = false;
+  // } else {
+  //   // Shift history to the right (oldest data at the end is overwritten)
+  //   for (int i = WMA_WINDOW - 1; i > 0; i--) {
+  //     angleHistory[encIdx][i] = angleHistory[encIdx][i - 1];
+  //   }
+  //   // Insert new reading at the beginning (index 0 is the newest data)
+  //   angleHistory[encIdx][0] = newAngle;
+  // }
 
-  // Calculate the weighted sum
-  float wma = 0;
-  for (int i = 0; i < WMA_WINDOW; i++) {
-    wma += angleHistory[encIdx][i] * WMA_WEIGHTS[i];
-  }
+  // // Calculate the weighted sum
+  // float wma = 0;
+  // for (int i = 0; i < WMA_WINDOW; i++) {
+  //   wma += angleHistory[encIdx][i] * WMA_WEIGHTS[i];
+  // }
 
-  // Divide by total weight to get the final averaged degree
-  return wma / WMA_WEIGHT_SUM;
+  // // Divide by total weight to get the final averaged degree
+  // return wma / WMA_WEIGHT_SUM;
+
+  MA_SUMS[encIdx]+=(newAngle-angleHistory[encIdx].front());
+  angleHistory[encIdx].pop();
+  angleHistory[encIdx].push(newAngle);
+
+  return MA_SUMS[encIdx] / MA_WINDOW;
 }
 
 // Setup function
@@ -243,83 +249,93 @@ void setupMA782() {
     digitalWrite(CS_PINS[i], HIGH);
   }
 
-  for (int i = 0; i < WMA_WINDOW; i++) {
-    WMA_WEIGHTS[i] = (float)(WMA_WINDOW - i);
-    WMA_WEIGHT_SUM += WMA_WEIGHTS[i];
+  for (int i = 0; i < MA_WINDOW; i++) {
+    readAllEncoders(w);
+    for (int j = 0; j < NUM_ENC; j++) {
+      float jointDeg = computeJointDeg(j, w[j]);
+      angleHistory[j].push(jointDeg);
+      MA_SUMS[j]+=jointDeg;
+    }
+    delayMicroseconds(1);
   }
 
-  Serial.println("4-Encoder SPI angle test + BCT");
-  Serial.println("JENC1 = SPLAY, range should be about -10 to +10 deg");
-  Serial.println("JENC2 = MCP, range 0 to 90 deg");
-  Serial.println("JENC3 = PIP, range 0 to 90 deg");
-  Serial.println("JENC4 = DIP, range 0 to 90 deg");
-  Serial.println();
+  // for (int i = 0; i < WMA_WINDOW; i++) {
+  //   WMA_WEIGHTS[i] = (float)(WMA_WINDOW - i);
+  //   WMA_WEIGHT_SUM += WMA_WEIGHTS[i];
+  // }
+
+  // Serial.println("4-Encoder SPI angle test + BCT");
+  // Serial.println("JENC1 = SPLAY, range should be about -10 to +10 deg");
+  // Serial.println("JENC2 = MCP, range 0 to 90 deg");
+  // Serial.println("JENC3 = PIP, range 0 to 90 deg");
+  // Serial.println("JENC4 = DIP, range 0 to 90 deg");
+  // Serial.println();
 
   // setBCTForAllEncoders();
 
-  Serial.println("Commands:");
-  Serial.println("  z : set all current positions as 0 deg");
-  Serial.println("  s : set SPLAY current position as +10 deg");
-  Serial.println("  m : set MCP current position as +90 deg");
-  Serial.println("  p : set PIP current position as +90 deg");
-  Serial.println("  d : set DIP current position as +90 deg");
-  Serial.println();
+  // Serial.println("Commands:");
+  // Serial.println("  z : set all current positions as 0 deg");
+  // Serial.println("  s : set SPLAY current position as +10 deg");
+  // Serial.println("  m : set MCP current position as +90 deg");
+  // Serial.println("  p : set PIP current position as +90 deg");
+  // Serial.println("  d : set DIP current position as +90 deg");
+  // Serial.println();
 }
 
-// Handle commands
-void handleCommandMA782() {
-  while (Serial.available()) {
-    char c = Serial.read();
+// // Handle commands
+// void handleCommandMA782() {
+//   while (Serial.available()) {
+//     char c = Serial.read();
 
-    if (c == 'z') {
-      // readAllEncoders(w);
+//     if (c == 'z') {
+//       // readAllEncoders(w);
 
-      // Serial.println("Set ZERO for all encoders:");
-      // for (int i = 0; i < NUM_ENC; i++) {
-      //   Serial.print("  ");
-      //   Serial.print(ENC_NAMES[i]);
-      //   Serial.print(" ZERO W=0x");
-      //   Serial.println(w_zero[i], HEX);
-      // }
-      // Serial.println();
-    }
-    else if (c == 's') {
-      // uint16_t w_now = spiRead16(CS_PINS[0]);
-      // w_cal[0] = w_now;
-      // haveCal[0] = true;
+//       // Serial.println("Set ZERO for all encoders:");
+//       // for (int i = 0; i < NUM_ENC; i++) {
+//       //   Serial.print("  ");
+//       //   Serial.print(ENC_NAMES[i]);
+//       //   Serial.print(" ZERO W=0x");
+//       //   Serial.println(w_zero[i], HEX);
+//       // }
+//       // Serial.println();
+//     }
+//     else if (c == 's') {
+//       // uint16_t w_now = spiRead16(CS_PINS[0]);
+//       // w_cal[0] = w_now;
+//       // haveCal[0] = true;
 
-      // Serial.print("Set SPLAY calibration at +10 deg, W=0x");
-      // Serial.println(w_cal[0], HEX);
-    }
+//       // Serial.print("Set SPLAY calibration at +10 deg, W=0x");
+//       // Serial.println(w_cal[0], HEX);
+//     }
 
-    else if (c == 'm') {
-      // uint16_t w_now = spiRead16(CS_PINS[1]);
-      // w_cal[1] = w_now;
-      // haveCal[1] = true;
+//     else if (c == 'm') {
+//       // uint16_t w_now = spiRead16(CS_PINS[1]);
+//       // w_cal[1] = w_now;
+//       // haveCal[1] = true;
 
-      // Serial.print("Set MCP calibration at +90 deg, W=0x");
-      // Serial.println(w_cal[1], HEX);
-    }
+//       // Serial.print("Set MCP calibration at +90 deg, W=0x");
+//       // Serial.println(w_cal[1], HEX);
+//     }
 
-    else if (c == 'p') {
-      // uint16_t w_now = spiRead16(CS_PINS[2]);
-      // w_cal[2] = w_now;
-      // haveCal[2] = true;
+//     else if (c == 'p') {
+//       // uint16_t w_now = spiRead16(CS_PINS[2]);
+//       // w_cal[2] = w_now;
+//       // haveCal[2] = true;
 
-      // Serial.print("Set PIP calibration at +90 deg, W=0x");
-      // Serial.println(w_cal[2], HEX);
-    }
+//       // Serial.print("Set PIP calibration at +90 deg, W=0x");
+//       // Serial.println(w_cal[2], HEX);
+//     }
 
-    else if (c == 'd') {
-      // uint16_t w_now = spiRead16(CS_PINS[3]);
-      // w_cal[3] = w_now;
-      // haveCal[3] = true;
+//     else if (c == 'd') {
+//       // uint16_t w_now = spiRead16(CS_PINS[3]);
+//       // w_cal[3] = w_now;
+//       // haveCal[3] = true;
 
-      // Serial.print("Set DIP calibration at +90 deg, W=0x");
-      // Serial.println(w_cal[3], HEX);
-    }
-  }
-}
+//       // Serial.print("Set DIP calibration at +90 deg, W=0x");
+//       // Serial.println(w_cal[3], HEX);
+//     }
+//   }
+// }
 
 // Get joint angles
 float* getJointAngles() {
@@ -327,12 +343,12 @@ float* getJointAngles() {
 
   for (int i = 0; i < NUM_ENC; i++) {
     float jointDeg = computeJointDeg(i, w[i]);
-    float wmaDeg = computeWMA(i, jointDeg);
+    float maDeg = computeMA(i, jointDeg);
     jointDegs[i] = jointDeg;
-    weightedJointDegs[i] = wmaDeg;
+    averagedJointDegs[i] = maDeg;
   }
 
-  return weightedJointDegs;
+  return averagedJointDegs;
 }
 
 // Get raw joint readings
@@ -350,8 +366,8 @@ void printJointAngles() {
     Serial.print(",");
     
     Serial.print(ENC_NAMES[i]);
-    Serial.print("_WMA:");
-    Serial.print(weightedJointDegs[i], 2);
+    Serial.print("_MA:");
+    Serial.print(averagedJointDegs[i], 2);
 
     if (i < NUM_ENC - 1) {
       Serial.print(",");

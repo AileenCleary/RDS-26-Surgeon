@@ -14,8 +14,8 @@ const float VEL_GAIN = 0.01f;
 const float VEL_INT_GAIN = 0.0f;
 
 // Conversion & Offsets
-const float DEGREES_PER_TURN = 14.12f;
-float motor_zero_offsets[NUM_MOTORS] = {8.5593f, -3.7436f, -22.8087f, 1.648f, 0.3597f};
+const float DEGREES_PER_TURN = 14.054f;
+float motor_zero_offsets[NUM_MOTORS] = {0.0f, 0.0f, 0.07f, 0.0f, 0.0f};
 
 // ==============================================================================
 // ODRIVE OBJECTS & CAN SETUP
@@ -109,12 +109,30 @@ void setupODrive() {
     }
   }
 
-  for (int i = 0; i < NUM_MOTORS; i++) {
+  // for (int i = 0; i < NUM_MOTORS; i++) {
+  //   if (odrive_data[i].received_feedback) {
+  //     motor_zero_offsets[i] = odrive_data[i].last_feedback.Pos_Estimate;
+  //     Serial.printf("Node %d Zero Offset set to: %.4f turns\n", i, motor_zero_offsets[i]);
+  //   }
+  // }
+
+  // Calculate zero offsets
+  if (odrive_data[0].received_feedback) {
+    motor_zero_offsets[0] = odrive_data[0].last_feedback.Pos_Estimate;
+  }
+  float* jointAngles = getJointAngles();
+  float motorAngles[NUM_MOTORS];
+  calculateMotorAngles(jointAngles, motorAngles);
+  for (int i = 1; i < NUM_MOTORS; i++) {
     if (odrive_data[i].received_feedback) {
-      motor_zero_offsets[i] = odrive_data[i].last_feedback.Pos_Estimate;
-      Serial.printf("Node %d Zero Offset set to: %.4f turns\n", i, motor_zero_offsets[i]);
+      float current_odrive_turns = odrive_data[i].last_feedback.Pos_Estimate;
+      float expected_kinematic_turns = motorAngles[i] / DEGREES_PER_TURN;
+      motor_zero_offsets[i] = current_odrive_turns - expected_kinematic_turns;
+      Serial.printf("Node %d Homing -> Expected: %6.2f turns | Actual ODrive: %6.2f turns | Offset: %6.4f\n", 
+                    i, expected_kinematic_turns, current_odrive_turns, motor_zero_offsets[i]);
     }
   }
+  Serial.println();
 
   // 4. CONFIGURE AND REQUEST CLOSED LOOP
   Serial.println("Configuring Connected ODrives for Closed Loop Control...");
@@ -128,18 +146,19 @@ void setupODrive() {
     odrives[i]->setPosGain(POS_GAIN);
     odrives[i]->setVelGains(VEL_GAIN, VEL_INT_GAIN);
     delay(10);
-    
-    // Command the motor to strictly hold its current relative zero position before engaging
-    odrives[i]->setPosition(motor_zero_offsets[i], 0.0f, 0.0f);
-    delay(10);
-    
     odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
   }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    odrives[i]->setPosition(motor_zero_offsets[i], 0.0f, 0.0f);
+  }
+
+  delay(1000);
 
   // 5. VERIFY CLOSED LOOP STATE
   Serial.println("Verifying Axis States...");
   unsigned long t0 = millis();
-  while (millis() - t0 < 1000) {
+  while (millis() - t0 < 5000) {
     pumpODriveCAN();
     delay(5);
   }
@@ -181,30 +200,30 @@ void moveSplay(float angle) {
 }
 
 void moveMCPFlex(float angle) {
+  if (odrive_data[4].received_heartbeat) {
+    float turns = motor_zero_offsets[4] + (angle / DEGREES_PER_TURN);
+    odrv4.setPosition(turns, 0.0f, 0.0f);
+  }
+}
+
+void moveMCPExt(float angle) {
   if (odrive_data[1].received_heartbeat) {
     float turns = motor_zero_offsets[1] + (angle / DEGREES_PER_TURN);
     odrv1.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
-void moveMCPExt(float angle) {
+void movePIPFlex(float angle) {
   if (odrive_data[2].received_heartbeat) {
     float turns = motor_zero_offsets[2] + (angle / DEGREES_PER_TURN);
     odrv2.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
-void movePIPFlex(float angle) {
+void movePIPExt(float angle) {
   if (odrive_data[3].received_heartbeat) {
     float turns = motor_zero_offsets[3] + (angle / DEGREES_PER_TURN);
     odrv3.setPosition(turns, 0.0f, 0.0f);
-  }
-}
-
-void movePIPExt(float angle) {
-  if (odrive_data[4].received_heartbeat) {
-    float turns = motor_zero_offsets[4] + (angle / DEGREES_PER_TURN);
-    odrv4.setPosition(turns, 0.0f, 0.0f);
   }
 }
 
@@ -245,6 +264,23 @@ void enableAllMotors() {
     // Wake up any motors that were previously put to sleep
     if (odrive_data[i].last_heartbeat.Axis_State != AXIS_STATE_CLOSED_LOOP_CONTROL) {
       odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+    }
+  }
+}
+
+void disableAllMotors() {
+  unsigned long t0 = millis();
+  while (millis() - t0 < 1000) {
+    pumpODriveCAN();
+    delay(5);
+  }
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) continue;
+    
+    // Wake up any motors that were previously put to sleep
+    if (odrive_data[i].last_heartbeat.Axis_State != AXIS_STATE_IDLE) {
+      odrives[i]->setState(AXIS_STATE_IDLE);
     }
   }
 }

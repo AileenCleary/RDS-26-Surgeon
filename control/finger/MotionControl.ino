@@ -52,13 +52,15 @@ void updateMotion(float dt) {
     };
 
     if (feedbackEnabled) {
-      handleCommandMA782(); // Ensure sensors are fresh
       float* actualJoints = getJointAngles(); 
       
       // Calculate PID corrections
-      commandJoints[0] += jointPIDs[0].compute(currentJointTarget[0], actualJoints[0], dt);
+      // commandJoints[0] += jointPIDs[0].compute(currentJointTarget[0], actualJoints[0], dt);
       commandJoints[1] += jointPIDs[1].compute(currentJointTarget[1], actualJoints[1], dt);
       commandJoints[2] += jointPIDs[2].compute(currentJointTarget[2], actualJoints[2], dt);
+      Serial.print(currentJointTarget[2]);
+      Serial.print(",");
+      Serial.println(actualJoints[2]);
       
       // Maintain PIP/DIP physical coupling after correction
       commandJoints[3] = commandJoints[2] * DIP_COUPLING_RATIO;
