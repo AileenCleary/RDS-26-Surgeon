@@ -5,7 +5,7 @@ from pydrake.all import (
 )
 from pydrake.all import Box, RigidTransform, RotationMatrix
 
-PACKAGE_ROOT = "/home/zach/472/finger_drake_sim/models"
+PACKAGE_ROOT = "../models"
 SDF_PATH     = PACKAGE_ROOT + "/urdf/finger.sdf"
 
 import logging

@@ -17,7 +17,7 @@ class _FilterPTC(logging.Filter):
         return "PTC_onshape_metadata" not in record.getMessage()
 logging.getLogger("drake").addFilter(_FilterPTC())
 
-PACKAGE_ROOT = "/home/zach/472/finger_drake_sim/models"
+PACKAGE_ROOT = "../models"
 SDF_PATH     = PACKAGE_ROOT + "/urdf/finger.sdf"
 
 TENDON_STIFFNESS = 5000.0
