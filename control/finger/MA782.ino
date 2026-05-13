@@ -44,12 +44,18 @@ const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 // bool haveZero = false;
 // bool haveCal[NUM_ENC] = {false, false, false, false};
 
-float w_zero[NUM_ENC] = {20578.0, 61590.0, 51579.0, 53864.0};
+// float w_zero[NUM_ENC] = {20578.0, 61590.0, 51579.0, 53864.0};
+uint16_t w_zero[NUM_ENC] = {
+  21720,  // SPLAY
+  48544,  // MCP
+  52342,  // PIP
+  52635   // DIP
+};
 float w_slope[NUM_ENC]  = {75.17, 223.49, 91.74, 130.57};
 
 float COMP_A[NUM_ENC]     = {1.801, 19.840, 6.094, 3.118}; 
 float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 2.72, -50.33};
-float COMP_OFFSET[NUM_ENC] = {-0.157, -16.217, 3.863, 2.281};
+float COMP_OFFSET[NUM_ENC] = {-0.757, -11.487, -1.077, 2.847};
 
 uint16_t w[NUM_ENC];
 float averagedJointDegs[NUM_ENC];

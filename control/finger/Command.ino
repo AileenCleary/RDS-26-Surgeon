@@ -1,5 +1,6 @@
 #include "Globals.h"
-
+void printMotorPositions();
+void runSafeHomeCommand();
 void handleCommand() {
   if (!Serial.available()) return;
 
@@ -11,6 +12,15 @@ void handleCommand() {
     currentMode = MODE_IDLE;
     disableAllMotors();
     Serial.println("ACK: Stopped continuous motion.");
+    return;
+  }
+
+  if (cmd == "POS") {
+    printMotorPositions();
+    return;
+  }
+  if (cmd == "HOME") {
+    runSafeHomeCommand();
     return;
   }
 
@@ -87,7 +97,7 @@ void handleCommand() {
     }
     else if (sscanf(cmd.c_str(), "MOVE MOTOR %d %f", &idx, &v0) == 2) {
       if (idx >= 0 && idx < 5) {
-        enableSingleMotor(idx);
+        enableAllMotors();
         currentMode = MODE_CONTROL_MOTOR;
         currentMotorTarget[idx] = v0; // Update only the specified motor
         Serial.printf("ACK: Moving MOTOR %d to %.1f\n", idx, v0);

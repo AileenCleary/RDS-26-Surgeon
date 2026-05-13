@@ -1,6 +1,7 @@
 // MotionControl.ino
 #include <math.h>
 #include "Globals.h"
+void moveMotors(float angles[5]);
 
 ControlMode currentMode = MODE_IDLE;
 unsigned long motionStartTime = 0;
