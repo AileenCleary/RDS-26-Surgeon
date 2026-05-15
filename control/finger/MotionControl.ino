@@ -59,6 +59,9 @@ void updateMotion(float dt) {
       // commandJoints[0] += jointPIDs[0].compute(currentJointTarget[0], actualJoints[0], dt);
       commandJoints[1] += jointPIDs[1].compute(currentJointTarget[1], actualJoints[1], dt);
       commandJoints[2] += jointPIDs[2].compute(currentJointTarget[2], actualJoints[2], dt);
+      Serial.print("DEBUG,");
+      Serial.print(commandJoints[2]);
+      Serial.print(",");
       Serial.print(currentJointTarget[2]);
       Serial.print(",");
       Serial.println(actualJoints[2]);

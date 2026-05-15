@@ -21,11 +21,14 @@ float motor_zero_offsets[NUM_MOTORS] = {0.0f, 0.0f, 0.07f, 0.0f, 0.0f};
 // 
 // Safe homing parameters
 const float HOME_DEADBAND_DEG = 1.0f;          // strict zero target
-const float HOME_STEP_DEG = 4.0f;              // smaller step for safer, more precise homing
+const float HOME_STEP_DEG = 1.0f;              // smaller step for safer, more precise homing
 const float HOME_MIN_PROGRESS_DEG = 0.05f;     // allow small progress near zero
 const int HOME_STUCK_LIMIT = 2;               // allow more slow steps before declaring stuck
 const int HOME_STEP_DELAY_MS = 60;            // give encoder/motor time to settle
 const int HOME_MAX_STEPS = 400;                // hard limit
+// Add this new parameter: Allow motors to pull past theoretical zero to take up tendon slack
+const float HOME_PULL_LIMIT_DEG = -30.0f;
+// 
 // ==============================================================================
 // ODRIVE OBJECTS & CAN SETUP
 // ==============================================================================
@@ -82,8 +85,11 @@ float activeJointErrorSum(float joints[4]) {
   return fabs(joints[0]) + fabs(joints[1]) + fabs(joints[2]);
 }
 
-bool activeJointsNearZero(float joints[4]) {
-  return fabs(joints[0]) < HOME_DEADBAND_DEG &&
+bool activeJointsNearZero(float joints[4]) { 
+  return 
+  // Temporarily bypass Splay (joints[0]) check due to mechanical hardware issues.
+  // Only check MCP (joints[1]) and PIP (joints[2]).
+  // fabs(joints[0]) < HOME_DEADBAND_DEG &&
          fabs(joints[1]) < HOME_DEADBAND_DEG &&
          fabs(joints[2]) < HOME_DEADBAND_DEG;
 }
@@ -107,47 +113,56 @@ void setCurrentMotorPositionsAsZero() {
 }
 
 bool safeHomeToZero(float startMotorAngles[]) {
-  Serial.println("===== SAFE HOMING TO ZERO (STRICT KINEMATIC LIMIT) =====");
+  Serial.println("===== SAFE HOMING TO ZERO (PURE SENSOR + STUCK PROTECT) =====");
 
   float cmd[NUM_MOTORS];
-
-  // 1. Initialize holding commands
   for (int i = 0; i < NUM_MOTORS; i++) {
     cmd[i] = startMotorAngles[i];
     currentMotorTarget[i] = cmd[i];
-    if (odrive_data[i].received_feedback) {
-      odrives[i]->setPosition(odrive_data[i].last_feedback.Pos_Estimate, 0.0f, 0.0f);
-    }
   }
   delay(300);
   pumpODriveCAN();
 
+  // STUCK PROTECTION: Record initial joint angles to track actual physical progress
+  float* initialJoints = getJointAngles();
+  float lastJoints[4] = {initialJoints[0], initialJoints[1], initialJoints[2], initialJoints[3]};
+  int stuckCounter = 0;
+
+  // Set maximum allowed travel (60 degrees relative to CURRENT position)
+  // Extensors (M1, M3) tighten (-), Flexors (M2, M4) loosen (+)
+  float homeTargets[NUM_MOTORS] = { 
+    cmd[0], 
+    startMotorAngles[1] - 300.0f,  // M1 Extensor
+    startMotorAngles[2] + 300.0f,  // M2 Flexor
+    startMotorAngles[3] - 300.0f,  // M3 Extensor
+    startMotorAngles[4] + 300.0f   // M4 Flexor
+  };
+
   for (int step = 0; step < HOME_MAX_STEPS; step++) {
     bool anyMotorMoving = false;
 
-    // 2. SAFE STEPPING: 每个电机独立向 0 逼近，到了 0 就死死停住！
-    for (int i = 0; i < NUM_MOTORS; i++) {
-      if (cmd[i] > HOME_STEP_DEG) {
+    // Execute safe step for active motors (skipping Motor 0 Splay)
+    for (int i = 1; i < NUM_MOTORS; i++) { 
+      if (cmd[i] > homeTargets[i] + HOME_STEP_DEG) {
         cmd[i] -= HOME_STEP_DEG;
         anyMotorMoving = true;
-      } else if (cmd[i] < -HOME_STEP_DEG) {
+      } else if (cmd[i] < homeTargets[i] - HOME_STEP_DEG) {
         cmd[i] += HOME_STEP_DEG;
         anyMotorMoving = true;
-      } else if (cmd[i] != 0.0f) {
-        cmd[i] = 0.0f; // 精准停在理论 0 点
+      } else if (cmd[i] != homeTargets[i]) {
+        cmd[i] = homeTargets[i];
         anyMotorMoving = true;
       }
       currentMotorTarget[i] = cmd[i];
     }
 
     moveMotors(cmd);
-
     unsigned long t0 = millis();
     while (millis() - t0 < HOME_STEP_DELAY_MS) {
       pumpODriveCAN(); delay(5);
     }
 
-    // 3. 读取当前关节状态
+    // Read new joint angles to verify physical movement
     float* jointsPtr = getJointAngles();
     float newJoints[4] = {jointsPtr[0], jointsPtr[1], jointsPtr[2], jointsPtr[3]};
 
@@ -156,18 +171,37 @@ bool safeHomeToZero(float startMotorAngles[]) {
                     step, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
     }
 
-    // 4. 双重停止条件：要么关节到 0 了，要么所有电机的命令都走完（归零）了
+    // CONDITION 1: SUCCESS. Sensors reached zero deadband.
     if (activeJointsNearZero(newJoints)) {
-      Serial.println("SUCCESS: Joints reached 0 before motors finished.");
+      Serial.println("SUCCESS: Joints reached 0. Perfect Homing!");
       setCurrentMotorPositionsAsZero();
       return true;
     }
 
+    // CONDITION 2: STUCK / SNAP PROTECTION
+    if (anyMotorMoving) {
+      // Calculate how much the active joints (MCP and PIP) actually moved
+      float progress = fabs(newJoints[1] - lastJoints[1]) + fabs(newJoints[2] - lastJoints[2]);
+      
+      if (progress < HOME_MIN_PROGRESS_DEG) {
+        stuckCounter++;
+        if (stuckCounter >= 40) { 
+          Serial.println("ERROR: STUCK DETECTED! Motors moved 40 deg but joints didn't (Tendon snapped or heavy slack).");
+          return false;
+        }
+      } else {
+        stuckCounter = 0; // Reset counter if joints are moving normally
+      }
+    }
+
+    // Update history for next iteration
+    for (int j = 0; j < 4; j++) lastJoints[j] = newJoints[j];
+
+    // CONDITION 3: REACHED MAX RUNWAY LIMIT
     if (!anyMotorMoving) {
-      Serial.println("SAFE STOP: All motors reached their kinematic 0 limits.");
-      // 就算关节没完全到 0，也不准再拉了！保护肌腱！
-      setCurrentMotorPositionsAsZero(); 
-      return true;
+      Serial.println("ERROR: Reached max 300 deg limit but joints didn't reach 0.");
+      // 绝对不能在这里调用 setCurrentMotorPositionsAsZero(); ！！！
+      return false; // 返回 false，告诉主程序 Homing 失败了
     }
   }
 
@@ -290,9 +324,9 @@ void setupODrive() {
                     odrive_data[i].last_heartbeat.Axis_Error);
     }
   }
-  // for (int i = 0; i < NUM_MOTORS; i++) {
-  //   odrives[i]->setPosition(motor_zero_offsets[i], 0.0f, 0.0f);
-  // }
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    odrives[i]->setPosition(motor_zero_offsets[i], 0.0f, 0.0f);
+  }
 
 
   // Do not auto-home in setup.
@@ -510,31 +544,25 @@ void runSafeHomeCommand() {
   }
 
   if (!allClosedLoop) {
-    Serial.println("ERROR: Not all motors are in CLOSED LOOP. HOME cancelled.");
-    return;
-  }
-
-  float motorAngles[NUM_MOTORS];
-    float* jointAngles = getJointAngles();
-    calculateMotorAngles(jointAngles, motorAngles);
-
-    Serial.println("Re-aligning motor zero offsets to theoretical joint-zero...");
-    for (int i = 0; i < NUM_MOTORS; i++) {
-      if (odrive_data[i].received_feedback) {
-        float current_odrive_turns = odrive_data[i].last_feedback.Pos_Estimate;
-        float expected_kinematic_turns = motorAngles[i] / DEGREES_PER_TURN;
-        motor_zero_offsets[i] = current_odrive_turns - expected_kinematic_turns;
-      }
-      Serial.printf("Motor %d starting kinematic angle = %.2f deg\n", i, motorAngles[i]);
+      Serial.println("ERROR: Not all motors are in CLOSED LOOP. HOME cancelled.");
+      return;
     }
 
-    Serial.println("Starting SAFE HOME to zero...");
-      bool success = safeHomeToZero(motorAngles); 
+    // === REPLACEMENT STARTS HERE ===
+    Serial.println("Starting SAFE HOME using pure joint sensors...");
+    
+    // 1. NEVER use kinematic calculations. Use the actual CURRENT motor target as the safe starting point.
+    float startMotorAngles[NUM_MOTORS];
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      startMotorAngles[i] = currentMotorTarget[i];
+    }
 
-      if (success) {
-        currentMode = MODE_IDLE; 
-        for (int i = 0; i < 4; i++) currentJointTarget[i] = 0.0f;
-        for (int i = 0; i < 5; i++) currentMotorTarget[i] = 0.0f;
-        Serial.println("Motion targets reset to 0. Holding straight position.");
-      }
-}
+    bool success = safeHomeToZero(startMotorAngles);
+
+    if (success) {
+      currentMode = MODE_IDLE;
+      for (int i = 0; i < 4; i++) currentJointTarget[i] = 0.0f;
+      for (int i = 0; i < 5; i++) currentMotorTarget[i] = 0.0f;
+      Serial.println("Motion targets reset to 0. Holding straight position.");
+    }
+  }

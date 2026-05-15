@@ -81,12 +81,17 @@ void handleCommand() {
       Serial.printf("ACK: Moving JOINTS to %.1f, %.1f, %.1f, %.1f\n", v0, v1, v2, v3);
     }
     else if (sscanf(cmd.c_str(), "MOVE JOINT %d %f", &idx, &v0) == 2) {
-      if (idx >= 0 && idx < 3) {
-        currentMode = MODE_CONTROL_JOINT;
-        currentJointTarget[idx] = v0;
-        Serial.printf("ACK: Moving JOINT %d to %.1f\n", idx, v0);
+      if (idx >= 0 && idx < 4) { 
+        if (v0 <= 0.0f) { 
+          currentMode = MODE_CONTROL_JOINT;
+          currentJointTarget[idx] = v0;
+          Serial.printf("ACK: Moving JOINT %d to %.1f\n", idx, v0);
+        } else {
+          Serial.println("ERROR: Joint target must be <= 0 (Negative for flexion).");
+        }
+        // ------------------------------
       } else {
-        Serial.println("ERROR: Invalid joint index. Use 0-2.");
+        Serial.println("ERROR: Invalid joint index.");
       }
     }
     else if (sscanf(cmd.c_str(), "MOVE MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {

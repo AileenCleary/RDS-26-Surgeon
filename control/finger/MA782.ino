@@ -46,16 +46,19 @@ const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 
 // float w_zero[NUM_ENC] = {20578.0, 61590.0, 51579.0, 53864.0};
 uint16_t w_zero[NUM_ENC] = {
-  21720,  // SPLAY
-  48544,  // MCP
-  52342,  // PIP
-  52635   // DIP
+  24150,  // SPLAY
+  47607,  // MCP
+  55822,  // PIP
+  18949   // DIP
 };
-float w_slope[NUM_ENC]  = {75.17, 223.49, 91.74, 130.57};
+float w_slope[NUM_ENC] = {75.17f, 134.66, 101.14f, 88.36f};
 
-float COMP_A[NUM_ENC]     = {1.801, 19.840, 6.094, 3.118}; 
-float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 2.72, -50.33};
-float COMP_OFFSET[NUM_ENC] = {-0.757, -11.487, -1.077, 2.847};
+// float COMP_A[NUM_ENC]     = {1.801, 19.840, 6.094, 3.118}; 
+// float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 2.72, -50.33};
+// float COMP_OFFSET[NUM_ENC] = {-0.757, -11.487, -1.077, 2.847};
+float COMP_A[NUM_ENC]      = {0.0f, 22.641f, 10.207f, 5.449f};
+float COMP_PHASE[NUM_ENC]  = {0.0f, -23.95f, -184.96f, -180.01f};
+float COMP_OFFSET[NUM_ENC] = {0.0f, 22.824f, -2.219f,-3.867f};
 
 uint16_t w[NUM_ENC];
 float averagedJointDegs[NUM_ENC];
