@@ -31,11 +31,11 @@ odrv0.config.dc_max_negative_current = -0.5
 
 # Basic Motor Info
 odrv0.axis0.config.motor.motor_type = ODrive.MotorType.PMSM_CURRENT_CONTROL
-odrv0.axis0.config.motor.pole_pairs = 8
+odrv0.axis0.config.motor.pole_pairs = 4
 odrv0.axis0.config.motor.torque_constant = 0.057
 odrv0.axis0.config.motor.current_soft_max = 2.63
 odrv0.axis0.config.motor.calibration_current = 0.88
-odrv0.axis0.config.motor.resistance_calib_max_voltage = 10.0
+odrv0.axis0.config.motor.resistance_calib_max_voltage = 20.0
 odrv0.axis0.config.calibration_lockin.current = 0.88
 
 # Configure NME3 encoder (RS422 SSI interface)
@@ -49,9 +49,10 @@ odrv0.spi_encoder0.config.singleturn_bits = 16
 # Enable CAN Bus
 odrv0.can.config.protocol = ODrive.Protocol.SIMPLE
 odrv0.can.config.baud_rate = 250000
-odrv0.axis0.config.can.node_id = 2
+odrv0.axis0.config.can.node_id = 1
 odrv0.axis0.config.can.heartbeat_msg_rate_ms = 100
 odrv0.axis0.config.can.encoder_msg_rate_ms = 10
+odrv0.axis0.config.can.iq_msg_rate_ms = 10
 odrv0.axis0.config.can.temperature_msg_rate_ms = 1000
 odrv0.axis0.config.can.bus_voltage_msg_rate_ms = 1000
 

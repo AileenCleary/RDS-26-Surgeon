@@ -46,19 +46,16 @@ const uint8_t SPI_MODE_USED = SPI_MODE0; // 0 or 3 supported
 
 // float w_zero[NUM_ENC] = {20578.0, 61590.0, 51579.0, 53864.0};
 uint16_t w_zero[NUM_ENC] = {
-  24150,  // SPLAY
-  47607,  // MCP
-  55822,  // PIP
-  18949   // DIP
+  50954,  // SPLAY
+  16476,  // MCP
+  44166,  // PIP
+  18139   // DIP
 };
-float w_slope[NUM_ENC] = {75.17f, 134.66, 101.14f, 88.36f};
+float w_slope[NUM_ENC] = {159.14f, 86.39f, 260.26f, 93.48f};
 
-// float COMP_A[NUM_ENC]     = {1.801, 19.840, 6.094, 3.118}; 
-// float COMP_PHASE[NUM_ENC] = {154.92, -215.47, 2.72, -50.33};
-// float COMP_OFFSET[NUM_ENC] = {-0.757, -11.487, -1.077, 2.847};
-float COMP_A[NUM_ENC]      = {0.0f, 22.641f, 10.207f, 5.449f};
-float COMP_PHASE[NUM_ENC]  = {0.0f, -23.95f, -184.96f, -180.01f};
-float COMP_OFFSET[NUM_ENC] = {0.0f, 22.824f, -2.219f,-3.867f};
+float COMP_A[NUM_ENC]      = {59.934f, 5.716f, 5.207f, 3.594f};
+float COMP_PHASE[NUM_ENC]  = {68.66f, -28.84f, -5.21f, -155.96f};
+float COMP_OFFSET[NUM_ENC] = {-58.605f, 4.722f, 3.253f,-1.801f};
 
 uint16_t w[NUM_ENC];
 float averagedJointDegs[NUM_ENC];
@@ -372,6 +369,11 @@ void printJointAngles() {
     Serial.print(ENC_NAMES[i]);
     Serial.print("_Raw:");
     Serial.print(w[i]);
+    Serial.print(",");
+
+    Serial.print(ENC_NAMES[i]);
+    Serial.print("_COMP:");
+    Serial.print(jointDegs[i]);
     Serial.print(",");
     
     Serial.print(ENC_NAMES[i]);

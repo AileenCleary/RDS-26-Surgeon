@@ -47,6 +47,8 @@ struct ODriveUserData {
   bool received_heartbeat = false;
   Get_Encoder_Estimates_msg_t last_feedback;
   bool received_feedback = false;
+  Get_Iq_msg_t last_iq;
+  bool received_iq = false;
 };
 ODriveUserData odrive_data[NUM_MOTORS];
 void moveMotors(float angles[]);

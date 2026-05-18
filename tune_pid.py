@@ -13,10 +13,10 @@ STEP_TARGET = -45.0 # The angle we want the joint to snap to
 # List of PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
     (1.0, 0.0, 0.0),   # Test 1: Low P, No I, No D
-    (3.0, 0.0, 0.0),   # Test 2: Medium P
-    (5.0, 0.0, 0.0),   # Test 3: High P (Might oscillate)
-    (3.0, 0.0, 0.1),   # Test 4: Medium P, with D damping
-    (3.0, 0.05, 0.1)   # Test 5: Full PID
+    # (3.0, 0.0, 0.0),   # Test 2: Medium P
+    # (5.0, 0.0, 0.0),   # Test 3: High P (Might oscillate)
+    # (3.0, 0.0, 0.1),   # Test 4: Medium P, with D damping
+    # (3.0, 0.05, 0.1)   # Test 5: Full PID
 ]
 # ---------------------
 

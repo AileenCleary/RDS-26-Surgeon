@@ -102,7 +102,6 @@ void handleCommand() {
     }
     else if (sscanf(cmd.c_str(), "MOVE MOTOR %d %f", &idx, &v0) == 2) {
       if (idx >= 0 && idx < 5) {
-        enableAllMotors();
         currentMode = MODE_CONTROL_MOTOR;
         currentMotorTarget[idx] = v0; // Update only the specified motor
         Serial.printf("ACK: Moving MOTOR %d to %.1f\n", idx, v0);
