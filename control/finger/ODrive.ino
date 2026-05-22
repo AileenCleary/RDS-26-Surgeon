@@ -47,8 +47,6 @@ struct ODriveUserData {
   bool received_heartbeat = false;
   Get_Encoder_Estimates_msg_t last_feedback;
   bool received_feedback = false;
-  Get_Iq_msg_t last_iq;
-  bool received_iq = false;
 };
 ODriveUserData odrive_data[NUM_MOTORS];
 void moveMotors(float angles[]);
@@ -231,31 +229,41 @@ void setupODrive() {
     odrives[i]->onFeedback(onFeedback, &odrive_data[i]);
   }
 
-  // 1. INDEFINITE WAIT FOR MOTORS THAT ARE BEING TESTED
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    Serial.printf("Waiting for ODrive Node %d heartbeat (Teensy will wait here until ODrive boots)...\n", i);
-    while (!odrive_data[i].received_heartbeat) {
-      pumpODriveCAN();
-      delay(10);
+  // 1. PARALLEL WAIT FOR ALL MOTORS (Safe for Star Topology)
+  Serial.println("Waiting for ALL 5 ODrive heartbeats (System will HOLD here until all are awake)...");
+  
+  bool all_awake = false;
+  unsigned long lastPrintTime = millis();
+
+  // Infinite loop listening until all nodes are awake
+  while (!all_awake) {
+    // 1. Rapidly clear the receive buffer and process all incoming CAN packets. 
+    // CRITICAL: DO NOT add delay() here! Let the MCU process as fast as possible.
+    pumpODriveCAN(); 
+    
+    // 2. Check if all 5 nodes have reported in
+    all_awake = true; // Assume all are awake initially
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      if (!odrive_data[i].received_heartbeat) {
+        all_awake = false; // If even one is not awake, invalidate the assumption
+      }
     }
-    Serial.printf("Node %d Heartbeat OK! ODrive is awake.\n", i);
+
+    // 3. Debug Helper: Print missing nodes every 1 second
+    if (!all_awake && (millis() - lastPrintTime > 1000)) {
+      Serial.print("⚠️ Still waiting for: ");
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        if (!odrive_data[i].received_heartbeat) {
+          Serial.printf("Node %d ", i);
+        }
+      }
+      Serial.println("...");
+      lastPrintTime = millis();
+    }
   }
 
-  // // 2. CHECK FOR OTHER MOTORS
-  // Serial.println("Checking for other connected ODrives (Waiting 5 seconds)...");
-  // unsigned long t0 = millis();
-  // while(millis() - t0 < 5000) {
-  //   pumpODriveCAN();
-  //   delay(5);
-  // }
-
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    if (odrive_data[i].received_heartbeat) {
-      Serial.printf("Node %d is ALIVE.\n", i);
-    } else {
-      Serial.printf("Node %d is NOT CONNECTED (Skipping).\n", i);
-    }
-  }
+  // The code only reaches here when received_heartbeat is true for all 5 nodes
+  Serial.println("✅ SUCCESS: All 5 ODrive Nodes are ALIVE and ready!");
 
   // for (int i = 0; i < NUM_MOTORS; i++) {
   //   if (odrive_data[i].received_feedback) {
