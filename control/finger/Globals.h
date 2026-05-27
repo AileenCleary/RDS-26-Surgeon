@@ -33,7 +33,8 @@ extern unsigned long streamStartTime;
 enum ControlMode {
   MODE_IDLE, MODE_TEST, MODE_CONTROL_TIP, MODE_CONTROL_JOINT, MODE_CONTROL_MOTOR,
   MODE_SINE_TIP, MODE_SINE_JOINT, MODE_SINE_MOTOR,
-  MODE_TRAJ_STREAMING_TIP, MODE_TRAJ_STREAMING_JOINT, MODE_TRAJ_STREAMING_MOTOR
+  MODE_TRAJ_STREAMING_TIP, MODE_TRAJ_STREAMING_JOINT, MODE_TRAJ_STREAMING_MOTOR,
+  MODE_CONTROL_FORCE
 };
 extern ControlMode currentMode;
 extern unsigned long motionStartTime;
@@ -57,6 +58,12 @@ extern float motor_Kp_soft;
 extern float motor_Kd_soft;
 extern float motor_pretension;
 extern float motor_prev_error[NUM_MOTORS];
+
+extern float currentForceTarget;
+extern float force_Kp;
+extern float force_Ki;
+extern float force_Kd;
+extern bool useForceSensor; // Toggles between A101 and Kinematic Estimation
 
 // --- OUTER LOOP: Joint Position PID Control (Tunable) ---
 struct PIDController {
@@ -96,11 +103,17 @@ void resetPIDs();
 void updateMotion(float dt);
 void handleCommand();
 
+void updateForceControl(float dt);
+
 float getKinematicRatio(int lead_motor_idx, int follower_motor_idx, int joint_idx);
 void estimateJointAnglesFromMotors(float* joints_out);
 void calculateMotorAngles(float* joints, float* motorAngles_out);
 void calculateJointAngles(float* target, float* joints_out);
 void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out);
+float getEstimatedTipForceScalar();
+void calculateJacobian(float J_out[3][3]);
+void mapJointTorquesToMotorTorques(float* tau_joint, float* tau_motor_out);
+void getBaseTipPosition(float* base_pos_mm);
 
 // Test Functions
 void testSingleMotor(int motorIndex);

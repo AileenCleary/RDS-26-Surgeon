@@ -86,8 +86,8 @@ void calculateJointAngles(float* target, float* joints_out) {
   joints_out[2] = 0.0f; 
   joints_out[3] = 0.0f; 
   
-  const int MAX_ITERATIONS = 50;
-  const float LEARNING_RATE = 0.001f;
+  const int MAX_ITERATIONS = 200;
+  const float LEARNING_RATE = 0.01f;
   const float TOLERANCE = 0.5f; 
   const float DELTA = 1.0f;     
 
@@ -146,4 +146,113 @@ void calculateMotorAngles(float* joints, float* motorAngles_out) {
     float motor_rad = (tendon_displacement / R_MOTOR[m]) * MOTOR_DIR[m];
     motorAngles_out[m] = motor_rad * RAD_TO_DEG;
   }
+}
+
+// Computes the 3x3 Geometric Jacobian
+void calculateJacobian(float J_out[3][3]) {
+  float tip_base[3], tip_delta[3];
+  float delta_rad = 0.001f; 
+  float delta_deg = delta_rad * RAD_TO_DEG;
+  
+  float q_deg[4];
+  estimateJointAnglesFromMotors(q_deg);
+  getForwardKinematics(q_deg[0], q_deg[1], q_deg[2], tip_base);
+
+  for (int j = 0; j < 3; j++) {
+    float q_temp[3] = { q_deg[0], q_deg[1], q_deg[2] };
+    q_temp[j] += delta_deg; 
+    getForwardKinematics(q_temp[0], q_temp[1], q_temp[2], tip_delta);
+    
+    // J = dx / dq. (Convert mm to meters)
+    J_out[0][j] = ((tip_delta[0] - tip_base[0]) / 1000.0f) / delta_rad;
+    J_out[1][j] = ((tip_delta[1] - tip_base[1]) / 1000.0f) / delta_rad;
+    J_out[2][j] = ((tip_delta[2] - tip_base[2]) / 1000.0f) / delta_rad;
+  }
+}
+
+// Maps 3D Joint Torques (Nm) to 5x Motor Torques (Nm) via Exact Decoupling
+void mapJointTorquesToMotorTorques(float* tau_joint, float* tau_motor_out) {
+  float T_pre = 2.0f; // 2 Newtons of baseline tendon pretension
+  float T[5] = {0.0f, T_pre, T_pre, T_pre, T_pre}; 
+
+  float R_mj[5][3];
+  for (int m = 0; m < 5; m++) {
+    for (int j = 0; j < 3; j++) {
+      // Virtual work moment arm mapping: tau = -J^T * T
+      R_mj[m][j] = -D[m][j] * (S[m][j] / 1000.0f);
+    }
+  }
+
+  // 1. PIP Joint (Crossed by M2, M3)
+  if (tau_joint[2] < 0.0f) { // Requires Flexion
+    T[3] = T_pre;
+    T[2] = (tau_joint[2] - R_mj[3][2]*T[3]) / R_mj[2][2];
+  } else { // Requires Extension
+    T[2] = T_pre;
+    T[3] = (tau_joint[2] - R_mj[2][2]*T[2]) / R_mj[3][2];
+  }
+
+  // 2. MCP Joint (Crossed by M1, M4. Disturbed by M2, M3)
+  float tau_mcp_disturb = R_mj[2][1]*T[2] + R_mj[3][1]*T[3];
+  float tau_mcp_req = tau_joint[1] - tau_mcp_disturb;
+
+  if (tau_mcp_req < 0.0f) { // Requires Flexion
+    T[1] = T_pre;
+    T[4] = (tau_mcp_req - R_mj[1][1]*T[1]) / R_mj[4][1];
+  } else { // Requires Extension
+    T[4] = T_pre;
+    T[1] = (tau_mcp_req - R_mj[4][1]*T[4]) / R_mj[1][1];
+  }
+
+  // 3. Splay Joint (Crossed by M0. Disturbed by M1, M2, M3, M4)
+  float tau_splay_disturb = R_mj[1][0]*T[1] + R_mj[2][0]*T[2] + R_mj[3][0]*T[3] + R_mj[4][0]*T[4];
+  float tau_splay_req = tau_joint[0] - tau_splay_disturb;
+  T[0] = tau_splay_req / R_mj[0][0];
+
+  // Convert Tensions to Motor Torques
+  const float GEAR_RATIO = 25.62f;
+  const float EFFICIENCY = 0.85f;
+  
+  for(int m = 0; m < 5; m++) {
+    // Soft constraint to avoid tendon snapping (Max ~60 N of physical tension)
+    if (m > 0) T[m] = constrain(T[m], T_pre, 60.0f);
+    else T[m] = constrain(T[m], -60.0f, 60.0f); // M0 is a belt, can support negative tension
+    
+    tau_motor_out[m] = T[m] * (R_MOTOR[m] / 1000.0f) / (GEAR_RATIO * EFFICIENCY) * MOTOR_DIR[m];
+  }
+}
+
+// Solves (J^T)^-1 to estimate the current tip force using the known motor torques
+float getEstimatedTipForceScalar() {
+  float q_deg[4];
+  estimateJointAnglesFromMotors(q_deg);
+
+  float T_tendon[5];
+  for (int m = 0; m < 5; m++) {
+    float tau_shaft = last_commanded_torque[m] * 25.62f * 0.85f;
+    T_tendon[m] = tau_shaft / (R_MOTOR[m] / 1000.0f) * MOTOR_DIR[m];
+  }
+
+  float tau_joint[3] = {0.0f, 0.0f, 0.0f};
+  for (int j = 0; j < 3; j++) {
+    for (int m = 0; m < 5; m++) {
+      tau_joint[j] += -D[m][j] * (S[m][j] / 1000.0f) * T_tendon[m];
+    }
+  }
+
+  float J[3][3];
+  calculateJacobian(J);
+
+  // Simplified extraction: Assuming the primary contact force opposes the Z-axis
+  // Fz = tau_PIP / Jz_PIP (Approximation for scalar output)
+  if (abs(J[2][2]) > 0.0001f) {
+    return abs(tau_joint[2] / J[2][2]);
+  }
+  return 0.0f;
+}
+
+void getBaseTipPosition(float* base_pos_mm) {
+  float joints[4];
+  estimateJointAnglesFromMotors(joints);
+  getForwardKinematics(joints[0], joints[1], joints[2], base_pos_mm);
 }

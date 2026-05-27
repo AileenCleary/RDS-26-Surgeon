@@ -18,8 +18,28 @@ void handleCommand() {
   if (cmd == "STREAM OFF") { streamTelemetry = false; Serial.println("END_DATA"); return; }
 
   // Settings
-  if (cmd == "PID ON") { feedbackEnabled = true; resetPIDs(); Serial.println("ACK: Joint PID ENABLED."); return; }
-  if (cmd == "PID OFF") { feedbackEnabled = false; Serial.println("ACK: Joint PID DISABLED."); return; }
+  if (cmd == "PID ON") {
+    feedbackEnabled = true;
+    resetPIDs();
+    Serial.println("ACK: Joint PID ENABLED.");
+    return;
+  }
+  if (cmd == "PID OFF") {
+    feedbackEnabled = false;
+    Serial.println("ACK: Joint PID DISABLED.");
+    return;
+  }
+
+  if (cmd == "FORCE SENSOR ON") { 
+    useForceSensor = true; 
+    Serial.println("ACK: Force Feedback set to A101 Physical Sensor."); 
+    return; 
+  }
+  if (cmd == "FORCE SENSOR OFF") { 
+    useForceSensor = false; 
+    Serial.println("ACK: Force Feedback set to Kinematic Estimation (Sensorless)."); 
+    return; 
+  }
 
   // Variables for parsing
   char type[10];
@@ -120,6 +140,14 @@ void handleCommand() {
     else if (cmd == "TEST FORCE") testForceSensor();
     else if (cmd == "TEST ENCODERS") testJointSensors();
     else if (sscanf(cmd.c_str(), "TEST MOTOR %d", &idx) == 1) testSingleMotor(idx);
+    else if (cmd == "TEST MAX FORCE FLEXED") testMaxForce(true);
+    else if (cmd == "TEST MAX FORCE EXTENDED") testMaxForce(false);
+    else if (cmd == "TEST STEP FORCE LOW") testStepForce(1.0f, 3.0f);
+    else if (cmd == "TEST STEP FORCE MID") testStepForce(1.0f, 10.0f);
+    else if (cmd == "TEST STEP FORCE HIGH") testStepForce(1.0f, 20.0f);
+    else if (cmd == "TEST STEP POS") testStepPosition();
+    else if (cmd == "TEST TRAJ") testTrajectory();
+    else if (cmd == "TEST IMPEDANCE") testImpedance();
   }
   else if (cmd.startsWith("CALIBRATE ENCODER ")) {
     enableAllMotors();

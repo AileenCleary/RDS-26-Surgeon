@@ -52,6 +52,8 @@ void computeAntagonisticTorque(int ext_id, int flex_id, int joint_idx, float cur
 void updateMotion(float dt) {
   if (dt <= 0.0f) dt = 0.02f;
 
+  if (currentMode == MODE_CONTROL_FORCE) return;
+
   if (currentMode == MODE_IDLE) {
     for (int i = 0; i < 5; i++) setMotorTorque(i, 0.0f);
     return;
