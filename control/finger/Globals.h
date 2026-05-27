@@ -9,83 +9,109 @@
 #include "ODriveCAN.h"
 #include "ODriveFlexCAN.hpp"
 
-const int NUM_ENC = 4;
-float jointDegs[NUM_ENC];
-bool streamTelemetry = false;
-unsigned long streamStartTime = 0;
+// Hardware Constants
+#define NUM_MOTORS 5
+#define NUM_ENC 4
+extern const float DEGREES_PER_TURN;
 
-// Control State Machine
-enum ControlMode {
-  MODE_IDLE,
-  MODE_TEST,
-  MODE_CONTROL_TIP,
-  MODE_CONTROL_JOINT,
-  MODE_CONTROL_MOTOR,
-  MODE_SINE_TIP,
-  MODE_SINE_JOINT,
-  MODE_SINE_MOTOR,
-  MODE_TRAJ_STREAMING_TIP,
-  MODE_TRAJ_STREAMING_JOINT,
-  MODE_TRAJ_STREAMING_MOTOR
+// ODrive Data Structs
+struct ODriveUserData {
+  Heartbeat_msg_t last_heartbeat;
+  bool received_heartbeat = false;
+  Get_Encoder_Estimates_msg_t last_feedback;
+  bool received_feedback = false;
 };
+extern ODriveUserData odrive_data[NUM_MOTORS];
+extern float motor_zero_offsets[NUM_MOTORS];
 
+// Sensor Variables
+extern float jointDegs[NUM_ENC];
+extern bool streamTelemetry;
+extern unsigned long streamStartTime;
+
+// State Machine
+enum ControlMode {
+  MODE_IDLE, MODE_TEST, MODE_CONTROL_TIP, MODE_CONTROL_JOINT, MODE_CONTROL_MOTOR,
+  MODE_SINE_TIP, MODE_SINE_JOINT, MODE_SINE_MOTOR,
+  MODE_TRAJ_STREAMING_TIP, MODE_TRAJ_STREAMING_JOINT, MODE_TRAJ_STREAMING_MOTOR
+};
 extern ControlMode currentMode;
-
-// Motion Parameters
 extern unsigned long motionStartTime;
 
-// Sine Wave Configuration
-extern int sineAxis; // 0=X/Splay/M0, 1=Y/MCP/M1, etc.
+// Sine/Traj Parameters
+extern int sineAxis; 
 extern float sineAmp;
 extern float sineFreq;
 extern float sineOffset;
 
-// Global Arrays for current target states
+// Active Targets
 extern float currentTipTarget[3];
 extern float currentJointTarget[4];
 extern float currentMotorTarget[5];
+extern float last_commanded_torque[NUM_MOTORS];
 
-// PID Control
+// --- INNER LOOP: Motor Torque PID Parameters (Constant) ---
+extern float motor_Kp_strong;
+extern float motor_Kd_strong;
+extern float motor_Kp_soft;
+extern float motor_Kd_soft;
+extern float motor_pretension;
+extern float motor_prev_error[NUM_MOTORS];
+
+// --- OUTER LOOP: Joint Position PID Control (Tunable) ---
 struct PIDController {
-  float Kp;
-  float Ki;
-  float Kd;
-  float integral;
-  float prevError;
-  float outputLimit; // Prevents wild corrections (e.g., max 15 degrees of over-pull)
-
-  void reset() {
-    integral = 0.0f;
-    prevError = 0.0f;
-  }
-
+  float Kp, Ki, Kd, integral, prevError, outputLimit;
+  void reset() { integral = 0.0f; prevError = 0.0f; }
   float compute(float target, float actual, float dt) {
     if (dt <= 0.0f) return 0.0f;
-    
     float error = target - actual;
     integral += error * dt;
-    
-    // Anti-windup for the integral term
     if (integral > outputLimit) integral = outputLimit;
     if (integral < -outputLimit) integral = -outputLimit;
-
     float derivative = (error - prevError) / dt;
     prevError = error;
-    
     float output = (Kp * error) + (Ki * integral) + (Kd * derivative);
-    
-    // Clamp the final correction output
     if (output > outputLimit) output = outputLimit;
     if (output < -outputLimit) output = -outputLimit;
-    
     return output;
   }
 };
-
-extern bool feedbackEnabled;
 extern PIDController jointPIDs[3];
+extern bool feedbackEnabled;
 
-// ODrive State Management
-void enableSingleMotor(int targetIdx);
-void enableAllMotors();
+// Function Prototypes
+void setupODrive();
+void pumpODriveCAN();
 void disableAllMotors();
+void enableAllMotors();
+void setMotorTorque(int motorIdx, float torqueNm);
+void runSafeHomeCommand();
+void printMotorPositions();
+
+void setupMA782();
+float* getJointAngles();
+float getForce();
+
+void resetPIDs();
+void updateMotion(float dt);
+void handleCommand();
+
+float getKinematicRatio(int lead_motor_idx, int follower_motor_idx, int joint_idx);
+void estimateJointAnglesFromMotors(float* joints_out);
+void calculateMotorAngles(float* joints, float* motorAngles_out);
+void calculateJointAngles(float* target, float* joints_out);
+void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out);
+
+// Test Functions
+void testSingleMotor(int motorIndex);
+void testAllMotorsTogether();
+void testJointSplay();
+void testJointMCP();
+void testJointPIP();
+void testDemo();
+void testForceSensor();
+void testJointSensors();
+void calibrateEncoderSplay();
+void calibrateEncoderMCP();
+void calibrateEncoderPIP();
+void calibrateEncoderDIP();

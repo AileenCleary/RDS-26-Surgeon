@@ -23,7 +23,7 @@ except Exception as e:
 
 time.sleep(1)
 print("Sending test command to Teensy...")
-ser.write(b"TEST LINEARITY MCP\n") 
+ser.write(b"CALIBRATE ENCODER MCP\n") 
 print("Waiting for START_DATA signal...")
 
 while True:

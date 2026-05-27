@@ -1,13 +1,11 @@
 #include <math.h>
+#include "Globals.h"
 
-// Hardware constants and configuration
-// Finger Link Lengths (mm)
 const float L_SPLAY = 24.0f;
 const float L_MCP = 44.0f;
 const float L_PIP = 39.0f;
 const float L_DIP = 22.0f;
 
-// Joint Pulley Radii (mm)
 const float R_TENDON = 0.2794f;
 const float R_PULLEY_SPLAY = 9.0f + R_TENDON;
 const float R_PULLEY_SPLAY_MCP = 6.4f + R_TENDON;
@@ -20,14 +18,10 @@ const float R_PULLEY_PIP   = 9.1f + R_TENDON;
 const float R_PULLEY_PIP_DIP   = 6.35f + R_TENDON;
 const float R_PULLEY_DIP   = 9.0f + R_TENDON;
 
-// Motor Radii (mm) and direction
 const float R_MOTOR[5] = { 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON, 4.0f + R_TENDON };
-const float MOTOR_DIR[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; // SPLAY, MCP_EXT, PIP_FLEX, PIP_EXT, MCP_FLEX
-
-// DIP Coupling Ratio
+const float MOTOR_DIR[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; 
 const float DIP_COUPLING_RATIO = R_PULLEY_PIP_DIP / R_PULLEY_DIP;
 
-// Direction matrix
 const float D[5][3] = {
   {1.0f, 0.0f, 0.0f},
   {-1.0f, -1.0f,  0.0f},
@@ -36,17 +30,40 @@ const float D[5][3] = {
   {1.0f, 1.0f, 0.0f}
 };
 
-// Structure matrix
 const float S[5][3] = {
-  // Splay              // MCP           // PIP
-  {  R_PULLEY_SPLAY,  0.0f,            0.0f }, // Motor/Tendon 0 (SPLAY)
-  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_EXT,  0.0f }, // Motor/Tendon 1 (MCP Extension)
-  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_FLEX,  R_PULLEY_PIP }, // Motor/Tendon 2 (PIP Flexion)
-  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_EXT,  R_PULLEY_PIP }, // Motor/Tendon 3 (PIP Extension)
-  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_FLEX,  0.0f } // Motor/Tendon 4 (MCP Flexion)
+  {  R_PULLEY_SPLAY,  0.0f,            0.0f }, 
+  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_EXT,  0.0f }, 
+  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_FLEX,  R_PULLEY_PIP }, 
+  {  R_PULLEY_SPLAY_PIP,  R_PULLEY_MCP_PIP_EXT,  R_PULLEY_PIP }, 
+  {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_FLEX,  0.0f } 
 };
 
-// Forward Kinematics
+float getKinematicRatio(int lead_idx, int follower_idx, int joint_idx) {
+  float lead_disp = (D[lead_idx][joint_idx] * S[lead_idx][joint_idx]) / R_MOTOR[lead_idx];
+  float fol_disp = (D[follower_idx][joint_idx] * S[follower_idx][joint_idx]) / R_MOTOR[follower_idx];
+  if (lead_disp == 0.0f) return 0.0f;
+  return fol_disp / lead_disp;
+}
+
+void estimateJointAnglesFromMotors(float* joints_out) {
+  float t[5] = {0};
+  for (int i=0; i<5; i++) {
+    if (odrive_data[i].received_feedback) {
+      float m_turns = odrive_data[i].last_feedback.Pos_Estimate - motor_zero_offsets[i];
+      t[i] = ((m_turns * DEGREES_PER_TURN * DEG_TO_RAD) * R_MOTOR[i]) / MOTOR_DIR[i];
+    }
+  }
+
+  float q0 = t[0] / (D[0][0] * S[0][0]);
+  float q1 = (t[1] - (D[1][0] * S[1][0] * q0)) / (D[1][1] * S[1][1]);
+  float q2 = (t[3] - (D[3][0] * S[3][0] * q0) - (D[3][1] * S[3][1] * q1)) / (D[3][2] * S[3][2]);
+  
+  joints_out[0] = q0 * RAD_TO_DEG;
+  joints_out[1] = q1 * RAD_TO_DEG;
+  joints_out[2] = q2 * RAD_TO_DEG;
+  joints_out[3] = joints_out[2] * DIP_COUPLING_RATIO;
+}
+
 void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out) {
   float q_dip_deg = q_pip_deg * DIP_COUPLING_RATIO;
   
@@ -63,7 +80,6 @@ void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, f
   tip_out[2] = z_planar;
 }
 
-// Inverse Kinematics
 void calculateJointAngles(float* target, float* joints_out) {
   joints_out[0] = 0.0f; 
   joints_out[1] = 0.0f; 
@@ -115,7 +131,6 @@ void calculateJointAngles(float* target, float* joints_out) {
   joints_out[3] = joints_out[2] * DIP_COUPLING_RATIO;
 }
 
-// Tendon Kinematics
 void calculateMotorAngles(float* joints, float* motorAngles_out) {
   float q_rad[3] = { 
     (float)(joints[0] * DEG_TO_RAD), 
