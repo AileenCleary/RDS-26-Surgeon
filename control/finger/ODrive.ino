@@ -264,65 +264,36 @@ bool safeHomeToZero(float startMotorAngles[]) {
 
 void runSafeHomeCommand() {
   Serial.println("Manual HOME command received.");
-
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    odrives[i]->setControllerMode(CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_PASSTHROUGH);
-    odrives[i]->setPosGain(3.0f);
-    odrives[i]->setVelGains(0.01f, 0.0f);
-  }
-  delay(100);
-  pumpODriveCAN();
-
-  enableAllMotors();
-
-  delay(500);
-  pumpODriveCAN();
-
-  bool allClosedLoop = true;
-
-  Serial.println("Checking closed-loop states before HOME...");
-  for (int i = 0; i < NUM_MOTORS; i++) {
+  setMotorTorque(2, 0.01);
+  setMotorTorque(4, 0.01);
+  float pos2 = 0.0f;
+  float pos4 = 0.0f;
+  float last_time = millis();
+  while (pos2 < 25.62 && pos4 < 25.62) {
     pumpODriveCAN();
-    delay(50);
-
-    uint8_t state = odrive_data[i].last_heartbeat.Axis_State;
-    uint32_t err = odrive_data[i].last_heartbeat.Axis_Error;
-
-    if (state == AXIS_STATE_CLOSED_LOOP_CONTROL && err == 0) {
-      Serial.printf("✅ Node %d ready for HOME.\n", i);
-    } else {
-      Serial.printf("❌ Node %d NOT ready for HOME. State: %d | Error: 0x%08X\n",
-                    i, state, err);
-      allClosedLoop = false;
+    unsigned long now = millis();
+    if (now - last_time >= 20) {
+      last_time = now;
+      pos2 = odrive_data[2].last_feedback.Pos_Estimate - motor_zero_offsets[2];
+      pos4 = odrive_data[4].last_feedback.Pos_Estimate - motor_zero_offsets[4];
+      if (pos2 >= 25.62) {
+        setMotorTorque(2, 0.0);
+      }
+      if (pos4 >= 25.62) {
+        setMotorTorque(4, 0.0);
+      }
     }
   }
-
-  if (!allClosedLoop) {
-    Serial.println("ERROR: Not all motors are in CLOSED LOOP. HOME cancelled.");
-    return;
-  }
-
-  // === REPLACEMENT STARTS HERE ===
-  Serial.println("Starting SAFE HOME using pure joint sensors...");
-  
-  // 1. NEVER use kinematic calculations. Use the actual CURRENT motor target as the safe starting point.
-  float startMotorAngles[NUM_MOTORS];
+  setMotorTorque(1, -0.06);
+  setMotorTorque(3, -0.06);
+  delay(5000);
+  setMotorTorque(2, -0.01);
+  setMotorTorque(4, -0.01);
+  delay(10000);
   for (int i = 0; i < NUM_MOTORS; i++) {
-    startMotorAngles[i] = currentMotorTarget[i];
+    setMotorTorque(i, 0.0);
   }
 
-  bool success = safeHomeToZero(startMotorAngles);
-
-  if (success) {
-    currentMode = MODE_IDLE;
-    for (int i = 0; i < 4; i++) currentJointTarget[i] = 0.0f;
-    for (int i = 0; i < 5; i++) currentMotorTarget[i] = 0.0f;
-    Serial.println("Motion targets reset to 0. Holding straight position.");
-  }
-
-  for (int i = 0; i < NUM_MOTORS; i++) {
-    odrives[i]->setControllerMode(CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH);
-  }
-  delay(100);
-  pumpODriveCAN();
+  setCurrentMotorPositionsAsZero();
+  zeroJoints();
 }

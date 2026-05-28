@@ -58,11 +58,15 @@ void runCalibrationSweep(int jointIdx, float end_deg) {
   while (millis() - start < 10000) {
     pumpODriveCAN();
     unsigned long now = millis();
+    getJointAngles();
     if (now - last_time >= 20) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       
       float t = (millis() - start) / 10000.0f;
+      if (jointIdx == 3) {
+        currentJointTarget[2] = end_deg * t / DIP_COUPLING_RATIO;
+      }
       currentJointTarget[jointIdx] = end_deg * t;
       
       updateMotion(dt);
@@ -77,7 +81,7 @@ void runCalibrationSweep(int jointIdx, float end_deg) {
   resetToZero();
 }
 
-void calibrateEncoderSplay() { Serial.println("--- CALIBRATING SPLAY ---"); runCalibrationSweep(0, 20.0f); }
+void calibrateEncoderSplay() { Serial.println("--- CALIBRATING SPLAY ---"); runCalibrationSweep(0, -20.0f); }
 void calibrateEncoderMCP() { Serial.println("--- CALIBRATING MCP ---"); runCalibrationSweep(1, -60.0f); }
 void calibrateEncoderPIP() { Serial.println("--- CALIBRATING PIP ---"); runCalibrationSweep(2, -90.0f); }
 void calibrateEncoderDIP() { Serial.println("--- CALIBRATING DIP ---"); runCalibrationSweep(3, -60.0f); }
@@ -105,7 +109,7 @@ void testAllMotorsTogether() {
 void testJointSplay() {
   Serial.println("TEST SPLAY");
   currentMode = MODE_CONTROL_JOINT;
-  currentJointTarget[0] = 10.0f;
+  currentJointTarget[0] = -10.0f;
   runTestDuration(3000);
   resetToZero();
 }
@@ -326,13 +330,25 @@ void testTrajectory() {
   
   currentMode = MODE_CONTROL_TIP;
   float f = 0.5f; // Frequency (Hz)
-  float base_x = 7.0; // Nominal center X (cm)
-  float base_z = -40.0f; // Nominal center Z (cm)
+  float base_x = 26.03; // Nominal center X 
+  float base_z = -59.09f; // Nominal center Z 
   float duration = 2.0f;
+
+  // --- 1. MOVE TO START POSITION ---
+  Serial.println("Moving to start position...");
+  // Calculate targets at t = 0
+  float target_x_start = 15.0f * sin(0.0f);
+  float target_z_start = 15.0f * sin(3.0f * PI / 4.0f);
   
+  currentTipTarget[0] = base_x + target_x_start;
+  currentTipTarget[1] = 0.0f; // No splay
+  currentTipTarget[2] = (base_z + target_z_start); 
+  
+  // Give the finger 1.5 seconds to smoothly move to the starting coordinates
+  runTestDuration(1500);
+
   unsigned long start = millis();
   unsigned long last_time = millis();
-  unsigned long last_print = millis();
   Serial.println("START_DATA");
   while (millis() - start < (duration * 1000)) {
     pumpODriveCAN();
@@ -344,22 +360,19 @@ void testTrajectory() {
       
       float t = (now - start) / 1000.0f;
       
-      float target_x_cm = 15.0f * sin(2.0f * PI * f * t);
-      float target_z_cm = 15.0f * sin(2.0f * PI * (2.0f * f) * t + (3.0f * PI / 4.0f));
+      float target_x = 15.0f * sin(2.0f * PI * f * t);
+      float target_z = 15.0f * sin(2.0f * PI * (2.0f * f) * t + (3.0f * PI / 4.0f));
       
-      currentTipTarget[0] = (base_x + target_x_cm) * 10.0f; // to mm
+      currentTipTarget[0] = base_x + target_x;
       currentTipTarget[1] = 0.0f; // No splay
-      currentTipTarget[2] = (base_z + target_z_cm) * 10.0f; // to mm
+      currentTipTarget[2] = (base_z + target_z); 
       
       updateMotion(dt);
       
-      if (now - last_print >= 50) { 
-        last_print = now;
-        float joints[4]; estimateJointAnglesFromMotors(joints);
-        float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
-        Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n", 
-          t, currentTipTarget[0]/10.0f, currentTipTarget[2]/10.0f, actual_tip[0]/10.0f, actual_tip[2]/10.0f);
-      }
+      float joints[4]; estimateJointAnglesFromMotors(joints);
+      float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n", 
+        t, currentTipTarget[0], currentTipTarget[2], actual_tip[0], actual_tip[2]);
     }
   }
   Serial.println("END_DATA");

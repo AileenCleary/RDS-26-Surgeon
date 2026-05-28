@@ -38,13 +38,6 @@ const float S[5][3] = {
   {  R_PULLEY_SPLAY_MCP,  R_PULLEY_MCP_FLEX,  0.0f } 
 };
 
-float getKinematicRatio(int lead_idx, int follower_idx, int joint_idx) {
-  float lead_disp = (D[lead_idx][joint_idx] * S[lead_idx][joint_idx]) / R_MOTOR[lead_idx];
-  float fol_disp = (D[follower_idx][joint_idx] * S[follower_idx][joint_idx]) / R_MOTOR[follower_idx];
-  if (lead_disp == 0.0f) return 0.0f;
-  return fol_disp / lead_disp;
-}
-
 void estimateJointAnglesFromMotors(float* joints_out) {
   float t[5] = {0};
   for (int i=0; i<5; i++) {
@@ -54,9 +47,33 @@ void estimateJointAnglesFromMotors(float* joints_out) {
     }
   }
 
+  static float prev_q1 = 0.0f;
+  static float prev_q2 = 0.0f;
+
   float q0 = t[0] / (D[0][0] * S[0][0]);
-  float q1 = (t[1] - (D[1][0] * S[1][0] * q0)) / (D[1][1] * S[1][1]);
-  float q2 = (t[3] - (D[3][0] * S[3][0] * q0) - (D[3][1] * S[3][1] * q1)) / (D[3][2] * S[3][2]);
+
+  float q1_ext  = (t[1] - (D[1][0] * S[1][0] * q0)) / (D[1][1] * S[1][1]);
+  float q1_flex = (t[4] - (D[4][0] * S[4][0] * q0)) / (D[4][1] * S[4][1]);
+  
+  float q1 = 0.0f;
+  if (currentJointTarget[1] < (prev_q1 * RAD_TO_DEG)) { 
+    q1 = q1_flex; 
+  } else { 
+    q1 = q1_ext;  
+  }
+
+  float q2_ext  = (t[3] - (D[3][0] * S[3][0] * q0) - (D[3][1] * S[3][1] * q1)) / (D[3][2] * S[3][2]);
+  float q2_flex = (t[2] - (D[2][0] * S[2][0] * q0) - (D[2][1] * S[2][1] * q1)) / (D[2][2] * S[2][2]);
+  
+  float q2 = 0.0f;
+  if (currentJointTarget[2] < (prev_q2 * RAD_TO_DEG)) {
+    q2 = q2_flex;
+  } else {
+    q2 = q2_ext;
+  }
+  
+  prev_q1 = q1;
+  prev_q2 = q2;
   
   joints_out[0] = q0 * RAD_TO_DEG;
   joints_out[1] = q1 * RAD_TO_DEG;
@@ -81,15 +98,10 @@ void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, f
 }
 
 void calculateJointAngles(float* target, float* joints_out) {
-  joints_out[0] = 0.0f; 
-  joints_out[1] = 0.0f; 
-  joints_out[2] = 0.0f; 
-  joints_out[3] = 0.0f; 
-  
   const int MAX_ITERATIONS = 200;
   const float LEARNING_RATE = 0.01f;
   const float TOLERANCE = 0.5f; 
-  const float DELTA = 1.0f;     
+  const float DELTA = 1.0f;
 
   float current[3], p_splay[3], p_mcp[3], p_pip[3];
 
@@ -218,7 +230,7 @@ void mapJointTorquesToMotorTorques(float* tau_joint, float* tau_motor_out) {
     if (m > 0) T[m] = constrain(T[m], T_pre, 60.0f);
     else T[m] = constrain(T[m], -60.0f, 60.0f); // M0 is a belt, can support negative tension
     
-    tau_motor_out[m] = T[m] * (R_MOTOR[m] / 1000.0f) / (GEAR_RATIO * EFFICIENCY) * MOTOR_DIR[m];
+    tau_motor_out[m] = -T[m] * (R_MOTOR[m] / 1000.0f) / (GEAR_RATIO * EFFICIENCY) * MOTOR_DIR[m];
   }
 }
 
@@ -249,10 +261,4 @@ float getEstimatedTipForceScalar() {
     return abs(tau_joint[2] / J[2][2]);
   }
   return 0.0f;
-}
-
-void getBaseTipPosition(float* base_pos_mm) {
-  float joints[4];
-  estimateJointAnglesFromMotors(joints);
-  getForwardKinematics(joints[0], joints[1], joints[2], base_pos_mm);
 }

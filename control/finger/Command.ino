@@ -90,6 +90,21 @@ void handleCommand() {
         Serial.println("ERROR: Invalid motor index. Use 0-4.");
       }
     }
+    else if (sscanf(cmd.c_str(), "MOVE TORQUE MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {
+      currentMode = MODE_CONTROL_TORQUE;
+      setMotorTorque(0, v0); setMotorTorque(1, v1); setMotorTorque(2, v2);
+      setMotorTorque(3, v3); setMotorTorque(4, v4);
+      Serial.println("ACK: Sending torque to MOTORS directly.");
+    }
+    else if (sscanf(cmd.c_str(), "MOVE TORQUE MOTOR %d %f", &idx, &v0) == 2) {
+      currentMode = MODE_CONTROL_TORQUE;
+      if (idx >= 0 && idx < 5) {
+        setMotorTorque(idx, v0);
+        Serial.printf("ACK: Sending torque to MOTOR %d to %.1f\n", idx, v0);
+      } else {
+        Serial.println("ERROR: Invalid motor index. Use 0-4.");
+      }
+    }
   }
   
   // ---------------------------------------------------------
@@ -176,6 +191,26 @@ void handleCommand() {
     float val; if (sscanf(cmd.c_str(), "SET J_KD %f", &val) == 1) { 
       for(int i=0; i<3; i++) jointPIDs[i].Kd = val; 
       Serial.printf("ACK: Joint Kd set to %.3f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET M_KP_S ")) {
+    float val; if (sscanf(cmd.c_str(), "SET M_KP_S %f", &val) == 1) { 
+      motor_Kp_strong = val; Serial.printf("ACK: motor_Kp_strong set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET M_KD_S ")) {
+    float val; if (sscanf(cmd.c_str(), "SET M_KD_S %f", &val) == 1) { 
+      motor_Kd_strong = val; Serial.printf("ACK: motor_Kd_strong set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET M_KP_W ")) {
+    float val; if (sscanf(cmd.c_str(), "SET M_KP_W %f", &val) == 1) { 
+      motor_Kp_soft = val; Serial.printf("ACK: motor_Kp_soft set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET M_KD_W ")) {
+    float val; if (sscanf(cmd.c_str(), "SET M_KD_W %f", &val) == 1) { 
+      motor_Kd_soft = val; Serial.printf("ACK: motor_Kd_soft set to %.4f\n", val); 
     }
   }
 }

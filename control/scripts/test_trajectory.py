@@ -44,12 +44,12 @@ while True:
     if line:
         try:
             parts = line.split(',')
-            if len(parts) == 3:
+            if len(parts) == 5:
                 times.append(float(parts[0]))
                 expected_x.append(float(parts[1]))
                 expected_y.append(float(parts[2]))
-                actual_x.append(int(parts[3])) 
-                actual_y.append(int(parts[4]))
+                actual_x.append(float(parts[3])) 
+                actual_y.append(float(parts[4]))
         except ValueError:
             pass 
 

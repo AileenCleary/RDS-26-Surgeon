@@ -17,14 +17,14 @@ PIDController jointPIDs[3] = {
 // ==============================================================================
 // These remain constant to manage the antagonistic tension
 float motor_Kp_strong = 0.02f;
-float motor_Kd_strong = 0.002f;
+float motor_Kd_strong = 0.0005f;
 
 // Antagonist (Yielding) Gains: Soft enough to not fight, strong enough to prevent slack
 float motor_Kp_soft = 0.005f;
-float motor_Kd_soft = 0.0005f;
+float motor_Kd_soft = 0.0002f;
 
 // Steady-state baseline tension
-float motor_pretension = 0.0003f; 
+float motor_pretension = 0.0006f; 
 
 float motor_prev_error[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 

@@ -20,7 +20,22 @@ float computeSingleMotorTorque(int motor_id, float target_turns, float kp, float
   float derivative = (error - motor_prev_error[motor_id]) / dt;
   motor_prev_error[motor_id] = error;
   
-  return (kp * error) + (kd * derivative);
+  // 1. Standard PD Torque
+  float pd_torque = (kp * error) + (kd * derivative);
+  
+  // 2. Friction Feedforward
+  float friction_torque = 0.003f; 
+  float deadband_turns = 0.01f;
+  
+  float total_torque = pd_torque;
+  
+  if (error > deadband_turns) {
+    total_torque += friction_torque;
+  } else if (error < -deadband_turns) {
+    total_torque -= friction_torque;
+  }
+
+  return total_torque;
 }
 
 void computeAntagonisticTorque(int ext_id, int flex_id, int joint_idx, float current_joint_pos, float dt) {
@@ -52,6 +67,8 @@ void computeAntagonisticTorque(int ext_id, int flex_id, int joint_idx, float cur
 void updateMotion(float dt) {
   if (dt <= 0.0f) dt = 0.02f;
 
+  if (currentMode == MODE_CONTROL_TORQUE) return;
+
   if (currentMode == MODE_CONTROL_FORCE) return;
 
   if (currentMode == MODE_IDLE) {
@@ -78,8 +95,6 @@ void updateMotion(float dt) {
     calculateJointAngles(currentTipTarget, currentJointTarget);
   }
 
-  // Prepare the targets we will actually send to the motor IK
-  // This allows us to modify them using the Joint Sensors without permanently altering the base target.
   float correctedJointTarget[4] = { currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], currentJointTarget[3] };
 
   // Apply Outer Loop Joint PID if MA782 sensors are enabled
@@ -114,14 +129,8 @@ void updateMotion(float dt) {
   // Normal Joint Operation (Antagonistic tracking)
   float currentJoints[4];
   estimateJointAnglesFromMotors(currentJoints);
-
-  // M0: Splay (1-to-1 linkage, always strong)
   float splay_torque = computeSingleMotorTorque(0, currentMotorTarget[0], motor_Kp_strong, motor_Kd_strong, dt);
-  setMotorTorque(0, splay_torque); // Splay typically doesn't need pretension
-
-  // M1/M4: MCP Joint
+  setMotorTorque(0, splay_torque);
   computeAntagonisticTorque(1, 4, 1, currentJoints[1], dt);
-
-  // M3/M2: PIP Joint
   computeAntagonisticTorque(3, 2, 2, currentJoints[2], dt);
 }

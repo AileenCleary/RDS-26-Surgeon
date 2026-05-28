@@ -16,16 +16,10 @@ SPISettings ma782_spi_settings(SPI_HZ, MSBFIRST, SPI_MODE_USED);
 
 // State Variables
 uint16_t raw_w[NUM_ENC];
-float averagedJointDegs[NUM_ENC];
 float jointDegs[NUM_ENC]; // Defined as extern in Globals.h
 
-// Simple Moving Average Filter State
-const int FILTER_SAMPLES = 20;
-float filter_buffer[NUM_ENC][FILTER_SAMPLES];
-int filter_index[NUM_ENC] = {0, 0, 0, 0};
-
 // Calibration Offsets (Update these based on your physical zero positions)
-float joint_zero_offsets[NUM_ENC] = {0.0f, 0.0f, 0.0f, 0.0f};
+float joint_zero_offsets[NUM_ENC] = {-7.40f, 36.82f, 163.66f, -146.90f};
 
 // ==============================================================================
 // INITIALIZATION
@@ -37,11 +31,23 @@ void setupMA782() {
   for (int i = 0; i < NUM_ENC; i++) {
     pinMode(CS_PINS[i], OUTPUT);
     digitalWrite(CS_PINS[i], HIGH); // Deselect (Active Low)
+  }
+
+  delay(10); // Give the sensors a brief moment to stabilize
+
+  // Fill buffers with initial actual readings to prevent startup ramp-up
+  for (int i = 0; i < NUM_ENC; i++) {
+    // 1. Take a single baseline reading for this sensor
+    uint16_t initial_raw = spiRead16(CS_PINS[i]);
+    float initial_deg = ((float)initial_raw / 65536.0f) * 360.0f;
     
-    // Initialize filter buffers to 0
-    for(int j = 0; j < FILTER_SAMPLES; j++) {
-      filter_buffer[i][j] = 0.0f;
-    }
+    // 2. Apply offsets and wrap-around exactly like the main loop
+    float startDeg = initial_deg - joint_zero_offsets[i];
+    if (startDeg > 180.0f) startDeg -= 360.0f;
+    if (startDeg < -180.0f) startDeg += 360.0f;
+    
+    // Initialize the main tracking variables as well
+    jointDegs[i] = startDeg;
   }
 }
 
@@ -61,20 +67,6 @@ uint16_t spiRead16(int cs_pin) {
   return result;
 }
 
-// ==============================================================================
-// DATA PROCESSING
-// ==============================================================================
-float computeMovingAverage(int sensor_idx, float new_val) {
-  filter_buffer[sensor_idx][filter_index[sensor_idx]] = new_val;
-  filter_index[sensor_idx] = (filter_index[sensor_idx] + 1) % FILTER_SAMPLES;
-  
-  float sum = 0.0f;
-  for (int i = 0; i < FILTER_SAMPLES; i++) {
-    sum += filter_buffer[sensor_idx][i];
-  }
-  return sum / (float)FILTER_SAMPLES;
-}
-
 // Main function called by the rest of the system
 float* getJointAngles() {
   for (int i = 0; i < NUM_ENC; i++) {
@@ -91,8 +83,15 @@ float* getJointAngles() {
     
     // 4. Filter and Store
     jointDegs[i] = jointDeg;
-    averagedJointDegs[i] = computeMovingAverage(i, jointDeg);
   }
 
-  return averagedJointDegs;
+  return jointDegs;
+}
+
+void zeroJoints() {
+  for (int i = 0; i < NUM_ENC; i++) {
+    raw_w[i] = spiRead16(CS_PINS[i]);
+    float raw_deg = ((float)raw_w[i] / 65536.0f) * 360.0f;
+    joint_zero_offsets[i] = raw_deg;
+  }
 }
