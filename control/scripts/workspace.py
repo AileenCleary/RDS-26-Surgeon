@@ -1,8 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Compute Workspace (possible joint locations for surgeon finger)
+# Compute Workspace (possible end-effector locations for surgeon finger)
 
+# Additional Notes:
+# 0,0,0 is defined as the fingertip position at home config ( -> 👈)
+# Flexion is negative z
+# Hence the points generated on the graph are end-effector (fingertip) points 
+
+# Basic Kinematics Defintions.
 # copy and paste constants (kinematics.ino)
 
 L_SPLAY = 24.0
