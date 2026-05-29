@@ -3,7 +3,7 @@ import time
 import matplotlib.pyplot as plt
 
 # --- CONFIGURATION ---
-COM_PORT = '/dev/cu.usbmodem176147301'
+COM_PORT = 'COM5'
 BAUD_RATE = 115200
 
 # The joint we are testing (2 = PIP)
@@ -12,7 +12,7 @@ STEP_TARGET = -45.0 # The angle we want the joint to snap to
 
 # List of PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
-    (1.0, 0.0, 0.0),   # Test 1: Low P, No I, No D
+    (1, 0.18, 0.03),   # Test 1: Low P, No I, No D
 ]
 # ---------------------
 
@@ -94,6 +94,13 @@ for (p, i, d) in PID_TEST_SETS:
 
 ser.write(b"PID OFF\n")
 ser.close()
+# ser.write(f"MOVE JOINT {TEST_AXIS} 0\n".encode())
+# time.sleep(3.0)
+# ser.write(b"STREAM OFF\n")
+# time.sleep(0.2)
+# ser.write(b"STOP\n")
+# ser.close()
+
 print("\nTesting Complete. Generating Plot...")
 
 # --- PLOTTING ---
