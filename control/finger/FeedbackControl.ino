@@ -7,9 +7,9 @@ bool feedbackEnabled = false; // Default off until sensors are working
 const float MAX_CORRECTION_DEG = 15.0f; // Max offset the PID can apply
 
 PIDController jointPIDs[3] = {
-  {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG}, // Splay
-  {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG}, // MCP
-  {1.0, 0.0, 0.0, 0.0, 0.0, MAX_CORRECTION_DEG}  // PIP
+  {2.35, 1.2, 0.001, 0.0, 0.0, MAX_CORRECTION_DEG}, // Splay
+  {0.85, 0.125, 0.021, 0.0, 0.0, MAX_CORRECTION_DEG}, // MCP
+  {1.0, 0.18, 0.03, 0.0, 0.0, MAX_CORRECTION_DEG}  // PIP
 };
 
 // ==============================================================================
