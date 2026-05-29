@@ -48,6 +48,8 @@ Open `http://localhost:7000` in a browser when the script starts. Press ▶ in M
 finger_drake_sim/
 ├── models/
 │   ├── urdf/
+│   │   └── finger_sliding.sdf
+│   │   └── finger_planar.sdf
 │   │   └── finger.sdf
 │   └── meshes/
 │       ├── holder.gltf
@@ -57,6 +59,16 @@ finger_drake_sim/
 │       └── distal.gltf
 ├── scripts/
 │   └── test_kinematic.py
+│   └── simulation_demo.py
+├── demos/
+│   └── kinematic_demo.py
+│   └── simulation_writing_demo.py
+│   └── simulation_shading_demo.py
+│   └── simulation_drawing_demo.py
+├── results/
+│   └── simulation_writing_graphs.png
+│   └── simulation_shading_graphs.png
+│   └── simulation_drawing_graphs.png
 └── README.md
 ```
 
