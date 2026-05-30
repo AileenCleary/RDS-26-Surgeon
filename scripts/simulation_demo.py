@@ -43,12 +43,111 @@ S = np.array([
 
 M = D * S
 
-def solve_tendon_tensions(tau_joint, min_tension=5.0):
-    lower_bounds = [-100.0, min_tension, min_tension, min_tension, min_tension]
-    upper_bounds = [100.0, 100.0, 100.0, 100.0, 100.0]
+# ==============================================================================
+# INNER LOOP MOTOR CONTROLLER & EXACT DECOUPLING
+# ==============================================================================
+
+def solve_tendon_tensions(tau_req, min_tension=2.0):
+    """
+    Analytical solver perfectly mapping Joint Torques to Motor Tensions via exact decoupling.
+    Mirrors mapJointTorquesToMotorTorques().
+    """
+    T = np.full(5, min_tension)
+    T[0] = 0.0
     
-    res = lsq_linear(M.T, tau_joint, bounds=(lower_bounds, upper_bounds))
-    return res.x
+    # 1. PIP (M2, M3) -> row 2 of M.T
+    if np.sign(M[2, 2]) == np.sign(tau_req[2]):
+        T[3] = min_tension
+        T[2] = (tau_req[2] - M[3, 2] * T[3]) / M[2, 2]
+    else:
+        T[2] = min_tension
+        T[3] = (tau_req[2] - M[2, 2] * T[2]) / M[3, 2]
+        
+    # 2. MCP (M1, M4) -> row 1 of M.T
+    tau_mcp_dist = M[2, 1] * T[2] + M[3, 1] * T[3]
+    tau_req_mcp = tau_req[1] - tau_mcp_dist
+    
+    if np.sign(M[1, 1]) == np.sign(tau_req_mcp):
+        T[4] = min_tension
+        T[1] = (tau_req_mcp - M[4, 1] * T[4]) / M[1, 1]
+    else:
+        T[1] = min_tension
+        T[4] = (tau_req_mcp - M[1, 1] * T[1]) / M[4, 1]
+        
+    # 3. Splay (M0) -> row 0 of M.T
+    tau_splay_dist = sum(M[i, 0] * T[i] for i in range(1, 5))
+    T[0] = (tau_req[0] - tau_splay_dist) / M[0, 0]
+    
+    T[0] = np.clip(T[0], -60.0, 60.0)
+    T[1:] = np.clip(T[1:], min_tension, 60.0)
+    return T
+
+class AntagonisticMotorController:
+    """
+    Inner loop motor PID simulating the ODrive antagonistic tensioning 
+    and friction feedforward.
+    """
+    def __init__(self):
+        self.Kp_strong = 0.02
+        self.Kd_strong = 0.0005
+        self.Kp_soft = 0.005
+        self.Kd_soft = 0.0002
+        self.pretension = 0.0006
+        self.friction = 0.003
+        self.R_MOTOR = 0.0042794 # 4.0mm + 0.2794mm
+        self.prev_error = np.zeros(5)
+
+    def compute_torque(self, motor_id, target_turns, actual_turns, kp, kd, dt):
+        error = target_turns - actual_turns
+        derivative = (error - self.prev_error[motor_id]) / dt
+        self.prev_error[motor_id] = error
+        
+        total_torque = (kp * error) + (kd * derivative)
+        
+        # Friction Feedforward
+        if error > 0.01:
+            total_torque += self.friction
+        elif error < -0.01:
+            total_torque -= self.friction
+            
+        return total_torque
+
+    def compute_tensions(self, q_target, q_actual, dt):
+        q_t, q_a = q_target[:3], q_actual[:3]
+        
+        tendon_target = M @ q_t
+        tendon_actual = M @ q_a
+        
+        target_turns = tendon_target / (2 * np.pi * self.R_MOTOR)
+        actual_turns = tendon_actual / (2 * np.pi * self.R_MOTOR)
+        
+        torques = np.zeros(5)
+        
+        # Motor 0 (Splay)
+        torques[0] = self.compute_torque(0, target_turns[0], actual_turns[0], self.Kp_strong, self.Kd_strong, dt)
+        
+        # MCP (Joint 1: M1 Ext, M4 Flex)
+        mcp_err = q_t[1] - q_a[1]
+        ext_kp, ext_kd = (self.Kp_strong, self.Kd_strong) if mcp_err > 0.0087 else (self.Kp_soft, self.Kd_soft)
+        flex_kp, flex_kd = (self.Kp_strong, self.Kd_strong) if mcp_err < -0.0087 else (self.Kp_soft, self.Kd_soft)
+        
+        torques[1] = self.compute_torque(1, target_turns[1], actual_turns[1], ext_kp, ext_kd, dt) - self.pretension
+        torques[4] = self.compute_torque(4, target_turns[4], actual_turns[4], flex_kp, flex_kd, dt) - self.pretension
+        
+        # PIP (Joint 2: M3 Ext, M2 Flex)
+        pip_err = q_t[2] - q_a[2]
+        ext_kp, ext_kd = (self.Kp_strong, self.Kd_strong) if pip_err > 0.0087 else (self.Kp_soft, self.Kd_soft)
+        flex_kp, flex_kd = (self.Kp_strong, self.Kd_strong) if pip_err < -0.0087 else (self.Kp_soft, self.Kd_soft)
+        
+        torques[3] = self.compute_torque(3, target_turns[3], actual_turns[3], ext_kp, ext_kd, dt) - self.pretension
+        torques[2] = self.compute_torque(2, target_turns[2], actual_turns[2], flex_kp, flex_kd, dt) - self.pretension
+        
+        # Convert to tensions (Negative torque pulls tendon)
+        tensions = -torques / self.R_MOTOR
+        tensions[0] = np.clip(tensions[0], -60.0, 60.0)
+        tensions[1:] = np.clip(tensions[1:], 0.0, 60.0)
+        
+        return tensions
 
 # ==============================================================================
 # OUTER LOOP PID CONTROLLER
@@ -300,6 +399,8 @@ def run_simulation(demo_type="write", word="RDS", image=""):
     pid_mcp   = PIDController(kp=1.0, ki=0.0, kd=0.001, output_limit=np.radians(15))
     pid_pip   = PIDController(kp=1.0, ki=0.0, kd=0.001, output_limit=np.radians(15))
 
+    motor_ctrl = AntagonisticMotorController()
+
     def solve_ik(target_pos, q_guess):
         MAX_ITERATIONS = 50
         TOLERANCE = 1e-4  
@@ -424,7 +525,16 @@ def run_simulation(demo_type="write", word="RDS", image=""):
             f_intent = -paper_normal * stroke['f'][i] 
             tau_req = J_finger.T @ f_intent 
             
-            tensions = solve_tendon_tensions(tau_req)
+            # 1. Feedforward exact decoupling for the drawing force
+            tensions_ff = solve_tendon_tensions(tau_req)
+            
+            # 2. Inner loop antagonistic motor tracking (position error)
+            q_des_rel = q_target[idx_splay:idx_pip+1]
+            q_act_rel = q_actual[idx_splay:idx_pip+1]
+            tensions_fb = motor_ctrl.compute_tensions(q_des_rel, q_act_rel, dt)
+            
+            # 3. Combine Feedforward Force + Feedback Position Tracking
+            tensions = tensions_ff + tensions_fb
             tau_actual = M.T @ tensions
             F_actual = np.linalg.pinv(J_finger.T) @ tau_actual
             actual_normal_force = np.dot(F_actual, -paper_normal) 
