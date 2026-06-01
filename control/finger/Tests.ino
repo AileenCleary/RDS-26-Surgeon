@@ -36,9 +36,16 @@ void testForceSensor() {
 
 void testJointSensors() {
   Serial.println("\n--- TESTING MA782 ENCODERS (10 Samples) ---");
+
   for (int i = 0; i < 10; i++) {
     float* joints = getJointAngles();
-    Serial.printf("Splay:%.2f, MCP:%.2f, PIP:%.2f, DIP:%.2f\n", joints[0], joints[1], joints[2], joints[3]);
+
+    Serial.printf(
+      "RAW S:%u M:%u P:%u D:%u | DEG S:%.2f M:%.2f P:%.2f D:%.2f\n",
+      raw_w[0], raw_w[1], raw_w[2], raw_w[3],
+      joints[0], joints[1], joints[2], joints[3]
+    );
+
     delay(200);
   }
 }
@@ -294,8 +301,12 @@ void testStepPosition() {
       updateMotion(dt);
       
         // Estimate actual tip pos from motor IK
-      float joints[4]; estimateJointAnglesFromMotors(joints);
-      float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      // float joints[4]; estimateJointAnglesFromMotors(joints);
+      // float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      float* joints = getJointAngles();
+
+      float actual_tip[3];
+      getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
       float target = currentTipTarget[2];
       float actual = actual_tip[2];
       float error = abs(target - actual);
@@ -328,11 +339,15 @@ void testTrajectory() {
   Serial.println("\n--- TEST: TRAJECTORY ---");
   Serial.println("Time(s), Target_X, Target_Z, Actual_X, Actual_Z");
   
+  feedbackEnabled = true;
+  resetPIDs();
+
+
   currentMode = MODE_CONTROL_TIP;
-  float f = 0.5f; // Frequency (Hz)
-  float base_x = 26.03; // Nominal center X 
-  float base_z = -59.09f; // Nominal center Z 
-  float duration = 2.0f;
+  float f = 0.05f; // Frequency (Hz)
+  float base_x = 75.03; // Nominal center X 
+  float base_z = -70.09f; // Nominal center Z 
+  float duration = 20.0f;
 
   // --- 1. MOVE TO START POSITION ---
   Serial.println("Moving to start position...");
@@ -369,15 +384,89 @@ void testTrajectory() {
       
       updateMotion(dt);
       
-      float joints[4]; estimateJointAnglesFromMotors(joints);
-      float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
-      Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n", 
-        t, currentTipTarget[0], currentTipTarget[2], actual_tip[0], actual_tip[2]);
+      float* joints = getJointAngles();
+
+      float actual_tip[3];
+      getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      //getForwardKinematics4(joints[0], joints[1], joints[2], joints[3], actual_tip);
+      // Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n", 
+      //   t, currentTipTarget[0], currentTipTarget[2], actual_tip[0], actual_tip[2]);
+      Serial.printf(
+        "%.3f, TX %.2f, TZ %.2f, AX %.2f, AZ %.2f, "
+        "TJ S %.2f M %.2f P %.2f D %.2f, "
+        "AJ S %.2f M %.2f P %.2f D %.2f\n",
+        t,
+        currentTipTarget[0],
+        currentTipTarget[2],
+        actual_tip[0],
+        actual_tip[2],
+        currentJointTarget[0],
+        currentJointTarget[1],
+        currentJointTarget[2],
+        currentJointTarget[3],
+        joints[0],
+        joints[1],
+        joints[2],
+        joints[3]
+      );
     }
   }
   Serial.println("END_DATA");
 
   resetToZero();
+  Serial.println("START_DATA");
+
+  // Pick several static points from the same trajectory.
+  // These are points on the original trajectory at t = 0, 5, 10, 15, 20 seconds.
+  // float test_times[] = {0.0f, 5.0f, 10.0f, 15.0f, 20.0f};
+  // int num_points = 5;
+
+  // for (int i = 0; i < num_points; i++) {
+  //   float t = test_times[i];
+
+  //   float target_x = 15.0f * sin(2.0f * PI * f * t);
+  //   float target_z = 15.0f * sin(2.0f * PI * (2.0f * f) * t + (3.0f * PI / 4.0f));
+
+  //   currentTipTarget[0] = base_x + target_x;
+  //   currentTipTarget[1] = 0.0f;
+  //   currentTipTarget[2] = base_z + target_z;
+
+  //   // Hold this point for 3 seconds so the finger can settle
+  //   unsigned long point_start = millis();
+  //   unsigned long last_time = millis();
+
+  //   while (millis() - point_start < 3000) {
+  //     pumpODriveCAN();
+
+  //     unsigned long now = millis();
+  //     if (now - last_time >= 20) {
+  //       float dt = (now - last_time) / 1000.0f;
+  //       last_time = now;
+
+  //       updateMotion(dt);
+  //     }
+  //   }
+
+  //   // After settling, read actual joint angles and compute actual fingertip position
+  //   float* joints = getJointAngles();
+
+  //   float actual_tip[3];
+  //   getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+
+  //   Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n",
+  //     t,
+  //     currentTipTarget[0],
+  //     currentTipTarget[2],
+  //     actual_tip[0],
+  //     actual_tip[2]
+  //   );
+
+  //   delay(300);
+  // }
+
+  // Serial.println("END_DATA");
+
+  // resetToZero();
 }
 
 // ------------------------------------------------------------------
@@ -418,4 +507,83 @@ void testImpedance() {
     resetToZero();
   };
   Serial.println("END_DATA");
+}
+
+void testTipPulseToZero() {
+  Serial.println("\n--- TEST: TIP PULSE TO ZERO ---");
+  Serial.println("Alternating every 1 second between TIP(60,0,-80) and JOINT ZERO for 10 seconds.");
+
+  feedbackEnabled = true;
+  resetPIDs();
+  enableAllMotors();
+
+  unsigned long test_start = millis();
+  unsigned long last_time = millis();
+
+  bool goingToTip = true;
+  int last_phase = -1;
+
+  while (millis() - test_start < 10000) {
+    pumpODriveCAN();
+
+    unsigned long now = millis();
+    float elapsed_s = (now - test_start) / 1000.0f;
+
+    // phase changes every 1 second: 0,1,2,3...
+    int phase = (int)elapsed_s;
+
+    if (phase != last_phase) {
+      last_phase = phase;
+
+      if (phase % 2 == 0) {
+        // Even seconds: move to tip target
+        currentMode = MODE_CONTROL_TIP;
+        currentTipTarget[0] = 60.0f;
+        currentTipTarget[1] = 0.0f;
+        currentTipTarget[2] = -80.0f;
+
+        Serial.printf("t=%.2f: Target = TIP 60, 0, -80\n", elapsed_s);
+      } else {
+        // Odd seconds: return to joint zero
+        currentMode = MODE_CONTROL_JOINT;
+        currentJointTarget[0] = 0.0f;
+        currentJointTarget[1] = 0.0f;
+        currentJointTarget[2] = 0.0f;
+        currentJointTarget[3] = 0.0f;
+
+        Serial.printf("t=%.2f: Target = JOINT ZERO\n", elapsed_s);
+      }
+    }
+
+    if (now - last_time >= 20) {
+      float dt = (now - last_time) / 1000.0f;
+      last_time = now;
+
+      updateMotion(dt);
+
+      float* joints = getJointAngles();
+
+      float actual_tip[3];
+      getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+
+      Serial.printf(
+        "DATA %.3f, mode %d, target_tip %.2f %.2f %.2f, actual_tip %.2f %.2f %.2f, joints %.2f %.2f %.2f %.2f\n",
+        elapsed_s,
+        currentMode,
+        currentTipTarget[0],
+        currentTipTarget[1],
+        currentTipTarget[2],
+        actual_tip[0],
+        actual_tip[1],
+        actual_tip[2],
+        joints[0],
+        joints[1],
+        joints[2],
+        joints[3]
+      );
+    }
+  }
+
+  Serial.println("Finished pulse test. Returning to zero...");
+  resetToZero();
 }

@@ -30,6 +30,13 @@ void handleCommand() {
     return;
   }
 
+  
+  if (cmd == "PRINT"){
+      printStatus();
+      return;
+    }
+
+
   if (cmd == "FORCE SENSOR ON") { 
     useForceSensor = true; 
     Serial.println("ACK: Force Feedback set to A101 Physical Sensor."); 
@@ -163,6 +170,8 @@ void handleCommand() {
     else if (cmd == "TEST STEP POS") testStepPosition();
     else if (cmd == "TEST TRAJ") testTrajectory();
     else if (cmd == "TEST IMPEDANCE") testImpedance();
+    else if (cmd == "TEST TIP PULSE") testTipPulseToZero();
+    
   }
   else if (cmd.startsWith("CALIBRATE ENCODER ")) {
     enableAllMotors();

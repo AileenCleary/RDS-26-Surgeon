@@ -5,10 +5,13 @@
   #undef CAN_ERROR_BUS_OFF
 #endif
 
+void printStatus();
+float* EstimateTipPosition(float* tip_out);
+
 #define IS_TEENSY_BUILTIN
 #include "ODriveCAN.h"
 #include "ODriveFlexCAN.hpp"
-
+void testTipPulseToZero();
 // Hardware Constants
 #define NUM_MOTORS 5
 #define NUM_ENC 4
