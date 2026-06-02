@@ -1,7 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import open3d as o3d
+import trimesh
+
+# Credit to Micheal Jenz for the code for transforming the workspace to an .stl
 
 # Compute Workspace (possible end-effector locations for surgeon finger)
+# Compute .stl for workspace
 
 # Additional Notes:
 # 0,0,0 is defined as the fingertip position at home config ( -> 👈)
@@ -43,7 +48,7 @@ def fk(q_splay, q_mcp, q_pip):
 
 # Sample Joint Spaces
 
-N = 45 #no. steps
+N = 55 #no. steps 
 
 #init splay values
 splay_vals = np.linspace(SPLAY_MIN,SPLAY_MAX,N)
@@ -58,6 +63,7 @@ splay_pos = fk(SPLAY_MAX, -45, -45)
 splay_neg = fk(SPLAY_MIN, -45, -45) 
 xs, ys, zs = [], [], []
 mcp_color  = []
+points = []
 
 #iterate for each splay, mcp, pip combination and dip
 #foward kinematics for each 
@@ -67,6 +73,7 @@ for qs in splay_vals:
             x, y, z = fk(qs, qm, qp)
             xs.append(x); ys.append(y); zs.append(z)
             mcp_color.append(qm)
+            points.append([x, y, z])
 
 xs = np.array(xs); ys = np.array(ys); zs = np.array(zs)
 mcp_color = np.array(mcp_color)
@@ -211,5 +218,52 @@ ax_txt.text(0.02, 0.98, stats, transform=ax_txt.transAxes,
 plt.suptitle('RDS-26 Surgeon Finger — Workspace Analysis', 
              color='white', fontsize=15, fontweight='bold', y=1.01)
 plt.tight_layout()
-plt.savefig('/Users/nicholasmelo/RDS-26-Surgeon/RDS-26-Surgeon/control/scripts/workspace.png', dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
+plt.savefig('C:/Users/Nicholas/RDS-26-Surgeon/control/scripts/workspace.png', dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
 print("\nSaved to workspace.png")
+
+### Addition: .stl of workspace for drawing demo
+
+print("Starting Mesh")
+pcd = o3d.geometry.PointCloud()
+pcd.points  = o3d.utility.Vector3dVector(points)
+pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=15.0, max_nn=50))
+pcd.orient_normals_consistent_tangent_plane(30)
+
+
+pcd.orient_normals_towards_camera_location(pcd.get_center())
+
+mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+    pcd, depth=9, width=0, scale=1.1, linear_fit=False
+)
+
+density_arr = np.asarray(densities)
+keep = density_arr > np.percentile(density_arr, 5)
+mesh = mesh.select_by_index(np.where(keep)[0])
+# mesh.compute_vertex_normals()
+
+# Clean up degenerate geometry
+
+mesh.remove_degenerate_triangles()
+mesh.remove_duplicated_triangles()
+mesh.remove_duplicated_vertices()
+mesh.remove_non_manifold_edges()
+
+mesh.paint_uniform_color([0.2, 0.6, 0.75]) #paint steel-ish color
+
+mesh.compute_vertex_normals()
+mesh.orient_triangles()
+
+o3d.io.write_triangle_mesh("C:/Users/Nicholas/RDS-26-Surgeon/control/scripts/workspace.stl", mesh)
+print("Saved")
+
+print("Building demo drawing plane")
+
+
+plane_mesh = o3d.geometry.TriangleMesh.create_box(width=80.0, height=0.5, depth=60.0)
+plane_mesh.translate([40.0, -30.0, -90.0])   # X: 40-120, Y:-30-+30, Z≈-90 (reachable)
+plane_mesh.paint_uniform_color([0.95, 0.95, 0.80])
+theta = np.radians(30)
+R = plane_mesh.get_rotation_matrix_from_xyz((theta, 0, 0))
+plane_mesh.rotate(R, center=(0, 0, 0))
+plane_mesh.compute_vertex_normals()
+o3d.io.write_triangle_mesh("C:/Users/Nicholas/RDS-26-Surgeon/control/scripts/drawing_space.stl", plane_mesh)
