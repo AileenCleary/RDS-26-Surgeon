@@ -27,6 +27,8 @@ void handleCommand() {
   if (cmd == "HOME") { runSafeHomeCommand(); return; }
   if (cmd == "STREAM ON") { streamTelemetry = true; streamStartTime = millis(); Serial.println("START_DATA"); return; }
   if (cmd == "STREAM OFF") { streamTelemetry = false; Serial.println("END_DATA"); return; }
+  if (cmd == "STREAM FORCE ON") { streamForceTelemetry = true; streamStartTime = millis(); Serial.println("START_DATA"); return; }
+  if (cmd == "STREAM FORCE OFF") { streamForceTelemetry = false; Serial.println("END_DATA"); return; }
 
   // Settings
   if (cmd == "PID ON") {
@@ -122,6 +124,10 @@ void handleCommand() {
       } else {
         Serial.println("ERROR: Invalid motor index. Use 0-4.");
       }
+    } else if (sscanf(cmd.c_str(), "MOVE FORCE %f", &f_val) == 1) {
+      currentMode = MODE_CONTROL_FORCE;
+      currentForceTarget = f_val;
+      Serial.printf("ACK: Force Target set to %.2f N\n", f_val);
     }
   }
   
@@ -182,8 +188,8 @@ void handleCommand() {
     else if (cmd == "TEST STEP POS") testStepPosition();
     else if (cmd == "TEST TRAJ") testTrajectory();
     else if (cmd == "TEST IMPEDANCE") testImpedance();
+    else if (cmd == "TEST SINE POS") testSinePosition();
     else if (cmd == "TEST TIP PULSE") testTipPulseToZero();
-    
   }
   else if (cmd.startsWith("CALIBRATE ENCODER ")) {
     enableAllMotors();
@@ -232,6 +238,21 @@ void handleCommand() {
   else if (cmd.startsWith("SET M_KD_W ")) {
     float val; if (sscanf(cmd.c_str(), "SET M_KD_W %f", &val) == 1) { 
       motor_Kd_soft = val; Serial.printf("ACK: motor_Kd_soft set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET F_KP ")) {
+    float val; if (sscanf(cmd.c_str(), "SET F_KP %f", &val) == 1) { 
+      force_Kp = val; Serial.printf("ACK: force_Kp set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET F_KI ")) {
+    float val; if (sscanf(cmd.c_str(), "SET F_KI %f", &val) == 1) { 
+      force_Ki = val; Serial.printf("ACK: force_Ki set to %.4f\n", val); 
+    }
+  }
+  else if (cmd.startsWith("SET F_KD ")) {
+    float val; if (sscanf(cmd.c_str(), "SET F_KD %f", &val) == 1) { 
+      force_Kd = val; Serial.printf("ACK: force_Kd set to %.4f\n", val); 
     }
   }
 }

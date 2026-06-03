@@ -30,6 +30,7 @@ extern float motor_zero_offsets[NUM_MOTORS];
 // Sensor Variables
 extern float jointDegs[NUM_ENC];
 extern bool streamTelemetry;
+extern bool streamForceTelemetry = false;
 extern unsigned long streamStartTime;
 
 // State Machine

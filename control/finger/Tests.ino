@@ -178,17 +178,19 @@ void testMaxForce(bool isFlexed) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       
-      // Ramp target by 2 N/sec (Max 30N)
+      // Ramp target by 2 N/sec (Max 20N)
       currentForceTarget += 2.0f * dt; 
       if (currentForceTarget > 20.0f) currentForceTarget = 20.0f;
       
       updateForceControl(dt);
       updateMotion(dt);
+
+      float actual_force = useForceSensor ? getForce() : getEstimatedTipForceScalar();
       
       if (now - last_print >= 50) { // 20Hz logging
         last_print = now;
-        Serial.printf("%.3f, %.2f, %.2f, %.2f, %.2f\n", 
-          (now-start)/1000.0f, currentForceTarget, getForce(), currentJointTarget[1], currentJointTarget[2]);
+        Serial.printf("%.3f, %.2f, %.2f\n", 
+          (now-start)/1000.0f, currentForceTarget, actual_force);
       }
     }
   }
@@ -261,7 +263,7 @@ void testStepForce(float lowN, float highN) {
 // ------------------------------------------------------------------
 void testStepPosition() {
   Serial.println("\n--- TEST: STEP POSITION CONTROL ---");
-  Serial.println("Time(s), Target_Z_Tip(cm), Actual_Z_Tip_Est(cm)");
+  Serial.println("Time(s), Target_Z_Tip, Actual_Z_Tip");
   
   currentMode = MODE_CONTROL_TIP;
   
@@ -506,6 +508,66 @@ void testImpedance() {
     }
     resetToZero();
   };
+  Serial.println("END_DATA");
+}
+
+// ------------------------------------------------------------------
+// ⭐ TEST 6: Sinusoidal Position Control Test (Frequency Response)
+// ------------------------------------------------------------------
+void testSinePosition() {
+  Serial.println("\n--- TEST: SINE POSITION CONTROL (0.1 to 100 Hz) ---");
+  Serial.println("START_DATA");
+  
+  currentMode = MODE_CONTROL_TIP;
+  
+  float base_x = 1.899f;
+  float base_z = 0.0f; 
+  
+  // Chirp Parameters
+  float f0 = 0.1f;        // Start frequency (Hz)
+  float f1 = 100.0f;      // End frequency (Hz)
+  float T = 60.0f;        // Sweep duration (Seconds)
+  
+  // Logarithmic sweep rate constant: k = ln(f1/f0) / T
+  float k = log(f1 / f0) / T;
+  
+  unsigned long start = millis();
+  unsigned long last_time = millis();
+  
+  while (millis() - start < (T * 1000)) {
+    pumpODriveCAN();
+    unsigned long now = millis();
+    
+    // FAST CONTROL LOOP: 2ms (500 Hz) to allow tracking up to 100 Hz
+    if (now - last_time >= 2) {
+      float dt = (now - last_time) / 1000.0f;
+      last_time = now;
+      
+      float t = (now - start) / 1000.0f;
+      
+      // Calculate instantaneous phase for logarithmic chirp
+      // Phase integral of f0 * exp(k*t) = f0 * (exp(k*t) - 1) / k
+      float phase = 2.0f * PI * f0 * (exp(k * t) - 1.0f) / k;
+      
+      // Target: (-15.0 + 10.0 * sin(phase)) mm
+      float target_z_offset_mm = -15.0f + 10.0f * sin(phase);
+      
+      currentTipTarget[0] = base_x;
+      currentTipTarget[1] = 0.0f; 
+      currentTipTarget[2] = base_z + target_z_offset_mm;
+      
+      updateMotion(dt);
+      
+      // Estimate actual tip pos from motor IK
+      float joints[4]; estimateJointAnglesFromMotors(joints);
+      float actual_tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      
+      // Log: Time, Expected Z, Actual Z
+      Serial.printf("%.4f, %.3f, %.3f\n", t, currentTipTarget[2], actual_tip[2]); 
+    }
+  }
+  
+  resetToZero();
   Serial.println("END_DATA");
 }
 

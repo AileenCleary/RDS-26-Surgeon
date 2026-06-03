@@ -3,6 +3,7 @@
 const uint32_t UART_BAUDRATE = 115200;
 unsigned long lastMotionTime = 0;
 bool streamTelemetry = false;
+bool streamForceTelemetry = false;
 unsigned long streamStartTime = millis();
 
 void setup() {
@@ -57,6 +58,12 @@ void loop() {
           estimatedJoints[0], estimatedJoints[1], estimatedJoints[2], estimatedJoints[3]);
         }
       }
+    }
+
+    if (streamForceTelemetry) {
+      float actual_force = useForceSensor ? getForce() : getEstimatedTipForceScalar();
+      float t_sec = (millis() - streamStartTime) / 1000.0f;
+      Serial.printf("%.3f,%.3f,%.3f\n", t_sec, currentForceTarget, actual_force);
     }
   }
 }
