@@ -30,7 +30,7 @@ extern float motor_zero_offsets[NUM_MOTORS];
 // Sensor Variables
 extern float jointDegs[NUM_ENC];
 extern bool streamTelemetry;
-extern bool streamForceTelemetry = false;
+extern bool streamForceTelemetry;
 extern unsigned long streamStartTime;
 
 // State Machine
@@ -38,7 +38,7 @@ enum ControlMode {
   MODE_IDLE, MODE_TEST, MODE_CONTROL_TIP, MODE_CONTROL_JOINT, MODE_CONTROL_MOTOR,
   MODE_SINE_TIP, MODE_SINE_JOINT, MODE_SINE_MOTOR,
   MODE_TRAJ_STREAMING_TIP, MODE_TRAJ_STREAMING_JOINT, MODE_TRAJ_STREAMING_MOTOR,
-  MODE_CONTROL_FORCE, MODE_CONTROL_TORQUE,
+  MODE_CONTROL_TORQUE,
 };
 extern ControlMode currentMode;
 extern unsigned long motionStartTime;
@@ -53,7 +53,7 @@ extern float sineOffset;
 extern float currentTipTarget[3];
 extern float currentJointTarget[4];
 extern float currentMotorTarget[5];
-extern float last_commanded_torque[NUM_MOTORS];
+extern float commanded_torque[NUM_MOTORS];
 
 // --- INNER LOOP: Motor Torque PID Parameters (Constant) ---
 extern float motor_Kp_strong;

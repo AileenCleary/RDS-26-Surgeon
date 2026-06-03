@@ -11,6 +11,10 @@ void runTestDuration(unsigned long ms) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
     }
   }
 }
@@ -77,6 +81,10 @@ void runCalibrationSweep(int jointIdx, float end_deg) {
       currentJointTarget[jointIdx] = end_deg * t;
       
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
       
       float estimatedJointAngles[NUM_ENC];
       estimateJointAnglesFromMotors(estimatedJointAngles);
@@ -163,8 +171,8 @@ void testMaxForce(bool isFlexed) {
     runTestDuration(2000); 
   }
   
-  currentMode = MODE_CONTROL_FORCE;
-  currentForceTarget = 5.0f;
+  currentMode = MODE_CONTROL_JOINT;
+  currentForceTarget = 0.0f;
   
   unsigned long start = millis();
   unsigned long last_time = millis();
@@ -182,10 +190,14 @@ void testMaxForce(bool isFlexed) {
       currentForceTarget += 2.0f * dt; 
       if (currentForceTarget > 20.0f) currentForceTarget = 20.0f;
       
-      updateForceControl(dt);
       updateMotion(dt);
+      updateForceControl(dt);
 
-      float actual_force = useForceSensor ? getForce() : getEstimatedTipForceScalar();
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
+
+      float actual_force = getForce();
       
       if (now - last_print >= 50) { // 20Hz logging
         last_print = now;
@@ -194,6 +206,7 @@ void testMaxForce(bool isFlexed) {
       }
     }
   }
+  currentForceTarget = 0.0f;
   resetToZero();
 }
 
@@ -204,7 +217,7 @@ void testStepForce(float lowN, float highN) {
   Serial.printf("\n--- TEST: STEP FORCE (%.1fN <-> %.1fN) ---\n", lowN, highN);
   Serial.println("Time(s), Target_Force(N), Actual_Force(N)");
   
-  currentMode = MODE_CONTROL_FORCE;
+  currentMode = MODE_CONTROL_JOINT;
   currentForceTarget = lowN;
   
   unsigned long start = millis();
@@ -231,11 +244,15 @@ void testStepForce(float lowN, float highN) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       float target = currentForceTarget;
-      float actual = useForceSensor ? getForce() : getEstimatedTipForceScalar();
+      float actual = getForce();
       float error = abs(target - actual);
       
-      updateForceControl(dt);
       updateMotion(dt);
+      updateForceControl(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
 
       if (actual > peak) {
         peak = actual;
@@ -301,6 +318,10 @@ void testStepPosition() {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
       
         // Estimate actual tip pos from motor IK
       // float joints[4]; estimateJointAnglesFromMotors(joints);
@@ -385,6 +406,10 @@ void testTrajectory() {
       currentTipTarget[2] = (base_z + target_z); 
       
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
       
       float* joints = getJointAngles();
 
@@ -472,46 +497,6 @@ void testTrajectory() {
 }
 
 // ------------------------------------------------------------------
-// ⭐ TEST 5: Fingertip Impedance Test
-// ------------------------------------------------------------------
-void testImpedance() {
-  Serial.println("\n--- TEST: IMPEDANCE CHARACTERIZATION ---");
-  
-  // Set to force control, targeting 0N (perfectly compliant)
-  currentMode = MODE_CONTROL_FORCE;
-  
-  float frequencies[] = {0.5, 1.0, 2.0, 5.0};
-  Serial.println("START_DATA");
-  for (float f : frequencies) {
-    float amp = 1.0; // 1 Newton oscillation
-    unsigned long start = millis();
-    unsigned long last_time = millis();
-  
-    while (millis() - start < 20000) { // 20 seconds to interact with it
-      pumpODriveCAN();
-      unsigned long now = millis();
-      
-      if (now - last_time >= 20) {
-        float dt = (now - last_time) / 1000.0f;
-        last_time = now;
-
-        float t = (millis() - start) / 1000.0;
-        currentForceTarget = amp * sin(2.0 * PI * f * t);
-        
-        updateForceControl(dt);
-        updateMotion(dt);
-        
-        float joints[4]; estimateJointAnglesFromMotors(joints);
-        float tip[3]; getForwardKinematics(joints[0], joints[1], joints[2], tip);
-        Serial.printf("%.3f, %.3f, %.3f\n", t, currentForceTarget, tip[2]);
-      }
-    }
-    resetToZero();
-  };
-  Serial.println("END_DATA");
-}
-
-// ------------------------------------------------------------------
 // ⭐ TEST 6: Sinusoidal Position Control Test (Frequency Response)
 // ------------------------------------------------------------------
 void testSinePosition() {
@@ -557,6 +542,10 @@ void testSinePosition() {
       currentTipTarget[2] = base_z + target_z_offset_mm;
       
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
       
       // Estimate actual tip pos from motor IK
       float joints[4]; estimateJointAnglesFromMotors(joints);
@@ -621,6 +610,10 @@ void testTipPulseToZero() {
       last_time = now;
 
       updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
 
       float* joints = getJointAngles();
 

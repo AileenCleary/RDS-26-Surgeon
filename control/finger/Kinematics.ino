@@ -241,7 +241,7 @@ float getEstimatedTipForceScalar() {
 
   float T_tendon[5];
   for (int m = 0; m < 5; m++) {
-    float tau_shaft = last_commanded_torque[m] * 25.62f * 0.85f;
+    float tau_shaft = commanded_torque[m] * 25.62f * 0.85f;
     T_tendon[m] = tau_shaft / (R_MOTOR[m] / 1000.0f) * MOTOR_DIR[m];
   }
 

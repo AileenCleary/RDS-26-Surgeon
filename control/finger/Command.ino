@@ -112,22 +112,26 @@ void handleCommand() {
     }
     else if (sscanf(cmd.c_str(), "MOVE TORQUE MOTOR %f %f %f %f %f", &v0, &v1, &v2, &v3, &v4) == 5) {
       currentMode = MODE_CONTROL_TORQUE;
-      setMotorTorque(0, v0); setMotorTorque(1, v1); setMotorTorque(2, v2);
-      setMotorTorque(3, v3); setMotorTorque(4, v4);
+      commanded_torque[0] = v0;
+      commanded_torque[1] = v1;
+      commanded_torque[2] = v2;
+      commanded_torque[3] = v3;
+      commanded_torque[4] = v4;
       Serial.println("ACK: Sending torque to MOTORS directly.");
     }
     else if (sscanf(cmd.c_str(), "MOVE TORQUE MOTOR %d %f", &idx, &v0) == 2) {
       currentMode = MODE_CONTROL_TORQUE;
       if (idx >= 0 && idx < 5) {
-        setMotorTorque(idx, v0);
+        commanded_torque[idx] = v0;
         Serial.printf("ACK: Sending torque to MOTOR %d to %.1f\n", idx, v0);
       } else {
         Serial.println("ERROR: Invalid motor index. Use 0-4.");
       }
-    } else if (sscanf(cmd.c_str(), "MOVE FORCE %f", &f_val) == 1) {
-      currentMode = MODE_CONTROL_FORCE;
-      currentForceTarget = f_val;
-      Serial.printf("ACK: Force Target set to %.2f N\n", f_val);
+    }
+    else if (sscanf(cmd.c_str(), "MOVE FORCE %f", &v0) == 1) {
+      currentMode = MODE_CONTROL_JOINT;
+      currentForceTarget = v0;
+      Serial.printf("ACK: Force Target set to %.2f N\n", v0);
     }
   }
   
@@ -170,14 +174,13 @@ void handleCommand() {
   // TESTS & CALIBRATION
   // ---------------------------------------------------------
   else if (cmd.startsWith("TEST ")) {
-    if (cmd == "TEST ENCODERS") testJointSensors();
-    
     enableAllMotors();
     if (cmd == "TEST MOTORS") testAllMotorsTogether();
     else if (cmd == "TEST SPLAY") testJointSplay();
     else if (cmd == "TEST MCP") testJointMCP();
     else if (cmd == "TEST PIP") testJointPIP();
     else if (cmd == "TEST DEMO") testDemo();
+    else if (cmd == "TEST ENCODERS") testJointSensors();
     else if (cmd == "TEST FORCE") testForceSensor();
     else if (sscanf(cmd.c_str(), "TEST MOTOR %d", &idx) == 1) testSingleMotor(idx);
     else if (cmd == "TEST MAX FORCE FLEXED") testMaxForce(true);
@@ -187,7 +190,6 @@ void handleCommand() {
     else if (cmd == "TEST STEP FORCE HIGH") testStepForce(1.0f, 20.0f);
     else if (cmd == "TEST STEP POS") testStepPosition();
     else if (cmd == "TEST TRAJ") testTrajectory();
-    else if (cmd == "TEST IMPEDANCE") testImpedance();
     else if (cmd == "TEST SINE POS") testSinePosition();
     else if (cmd == "TEST TIP PULSE") testTipPulseToZero();
   }

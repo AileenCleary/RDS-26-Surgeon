@@ -21,15 +21,20 @@ void setup() {
 void loop() {
   pumpODriveCAN();
   handleCommand();
-  float* joints = getJointAngles(); // Capture the pointer so we can print it
-  getForce();
   
   unsigned long currentMillis = millis();
   if (currentMillis - lastMotionTime >= 20) {
+    float* joints = getJointAngles();
+
     float dt = (currentMillis - lastMotionTime) / 1000.0f;
     lastMotionTime = currentMillis;
     
     updateMotion(dt);
+    updateForceControl(dt);
+
+    for (int i = 0; i < NUM_MOTORS; i++) {
+      setMotorTorque(i, commanded_torque[i]);
+    }
     
     if (streamTelemetry) {
       float t = (currentMillis - streamStartTime) / 1000.0f;
@@ -61,7 +66,7 @@ void loop() {
     }
 
     if (streamForceTelemetry) {
-      float actual_force = useForceSensor ? getForce() : getEstimatedTipForceScalar();
+      float actual_force = getForce();
       float t_sec = (millis() - streamStartTime) / 1000.0f;
       Serial.printf("%.3f,%.3f,%.3f\n", t_sec, currentForceTarget, actual_force);
     }

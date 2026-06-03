@@ -19,7 +19,7 @@ uint16_t raw_w[NUM_ENC];
 float jointDegs[NUM_ENC]; // Defined as extern in Globals.h
 
 // Calibration Offsets (Update these based on your physical zero positions)
-float joint_zero_offsets[NUM_ENC] = {-9.4f, -25.77f, 386.97f, -132.42f};
+float joint_zero_offsets[NUM_ENC] = {-13.9f, -67.07f, 109.97f, -153.32f};
 
 // ==============================================================================
 // INITIALIZATION
@@ -58,12 +58,15 @@ uint16_t spiRead16(int cs_pin) {
   uint16_t result = 0;
   SPI.beginTransaction(ma782_spi_settings);
   digitalWrite(cs_pin, LOW);
+  delayMicroseconds(1);
   
   // MA782 requires sending 16 bits to read 16 bits
   result = SPI.transfer16(0x0000); 
+  delayMicroseconds(1);
   
   digitalWrite(cs_pin, HIGH);
   SPI.endTransaction();
+  delayMicroseconds(5);
   return result;
 }
 

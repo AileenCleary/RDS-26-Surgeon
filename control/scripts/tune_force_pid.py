@@ -3,7 +3,7 @@ import time
 import matplotlib.pyplot as plt
 
 # --- CONFIGURATION ---
-COM_PORT = 'COM5'
+COM_PORT = '/dev/cu.usbmodem176147301'
 BAUD_RATE = 115200
 
 # The force we want the finger to exert (in Newtons)
@@ -11,9 +11,7 @@ STEP_TARGET_FORCE = 5.0
 
 # List of Force PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
-    (1.0, 0.0, 0.0),      # Test 1: P Only (Expect steady-state error)
-    (1.0, 0.5, 0.01),     # Test 2: Add I to close error, D to damp overshoot
-    (1.5, 0.8, 0.05),     # Test 3: Aggressive tuning
+    (0.0115, 0.00007, 0.00022),
 ]
 # ---------------------
 

@@ -2,12 +2,12 @@
 
 const uint32_t CAN_BAUDRATE = 250000;
 const float VEL_LIMIT_TURNS_S = 90.0f;
-const float I_SOFT_A = 0.2f;
+const float I_SOFT_A = 0.8f;
 const float DEGREES_PER_TURN = 14.054f;
 
 float motor_zero_offsets[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 ODriveUserData odrive_data[NUM_MOTORS];
-float last_commanded_torque[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float commanded_torque[NUM_MOTORS] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 // Safe homing parameters
 const float HOME_DEADBAND_DEG = 1.0f;          // strict zero target
@@ -48,7 +48,7 @@ void pumpODriveCAN() { pumpEvents(can1); }
 void setMotorTorque(int motorIdx, float torqueNm) {
   if (motorIdx >= 0 && motorIdx < NUM_MOTORS && odrive_data[motorIdx].received_heartbeat) {
     odrives[motorIdx]->setTorque(torqueNm);
-    last_commanded_torque[motorIdx] = torqueNm;
+    commanded_torque[motorIdx] = torqueNm;
   }
 }
 

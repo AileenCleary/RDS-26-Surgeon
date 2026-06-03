@@ -60,19 +60,19 @@ void computeAntagonisticTorque(int ext_id, int flex_id, int joint_idx, float cur
   float flex_torque = computeSingleMotorTorque(flex_id, currentMotorTarget[flex_id], flex_Kp, flex_Kd, dt);
 
   // Apply baseline pretension (Assumes negative torque pulls tendon in. Change to + if reversed).
-  setMotorTorque(ext_id, ext_torque - motor_pretension);
-  setMotorTorque(flex_id, flex_torque - motor_pretension);
+  commanded_torque[ext_id] = ext_torque - motor_pretension;
+  commanded_torque[flex_id] = flex_torque - motor_pretension;
 }
 
 void updateMotion(float dt) {
   if (dt <= 0.0f) dt = 0.02f;
 
-  if (currentMode == MODE_CONTROL_TORQUE) return;
-
-  if (currentMode == MODE_CONTROL_FORCE) return;
-
   if (currentMode == MODE_IDLE) {
-    for (int i = 0; i < 5; i++) setMotorTorque(i, 0.0f);
+    for (int i = 0; i < 5; i++) commanded_torque[i] = 0.0;
+    return;
+  }
+
+  if (currentMode == MODE_CONTROL_TORQUE) {
     return;
   }
 
@@ -121,7 +121,7 @@ void updateMotion(float dt) {
   if (currentMode == MODE_CONTROL_MOTOR || currentMode == MODE_SINE_MOTOR || currentMode == MODE_TRAJ_STREAMING_MOTOR) {
     for (int i = 0; i < 5; i++) {
       float torque = computeSingleMotorTorque(i, currentMotorTarget[i], motor_Kp_strong, motor_Kd_strong, dt);
-      setMotorTorque(i, torque);
+      commanded_torque[i] = torque;
     }
     return;
   }
@@ -130,7 +130,7 @@ void updateMotion(float dt) {
   float currentJoints[4];
   estimateJointAnglesFromMotors(currentJoints);
   float splay_torque = computeSingleMotorTorque(0, currentMotorTarget[0], motor_Kp_strong, motor_Kd_strong, dt);
-  setMotorTorque(0, splay_torque);
+  commanded_torque[0] = splay_torque;
   computeAntagonisticTorque(1, 4, 1, currentJoints[1], dt);
   computeAntagonisticTorque(3, 2, 2, currentJoints[2], dt);
 }
