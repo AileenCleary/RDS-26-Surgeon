@@ -13,6 +13,17 @@ void handleCommand() {
     return;
   }
   
+
+  if (cmd == "PRINT ERRORS") {
+    printODriveErrors();
+    return;
+  }
+
+  if (cmd == "CLEAR ERRORS") {
+    clearODriveErrorsAndEnable();
+    return;
+  }
+
   if (cmd == "HOME") { runSafeHomeCommand(); return; }
   if (cmd == "STREAM ON") { streamTelemetry = true; streamStartTime = millis(); Serial.println("START_DATA"); return; }
   if (cmd == "STREAM OFF") { streamTelemetry = false; Serial.println("END_DATA"); return; }
@@ -153,6 +164,8 @@ void handleCommand() {
   // TESTS & CALIBRATION
   // ---------------------------------------------------------
   else if (cmd.startsWith("TEST ")) {
+    if (cmd == "TEST ENCODERS") testJointSensors();
+    
     enableAllMotors();
     if (cmd == "TEST MOTORS") testAllMotorsTogether();
     else if (cmd == "TEST SPLAY") testJointSplay();
@@ -160,7 +173,6 @@ void handleCommand() {
     else if (cmd == "TEST PIP") testJointPIP();
     else if (cmd == "TEST DEMO") testDemo();
     else if (cmd == "TEST FORCE") testForceSensor();
-    else if (cmd == "TEST ENCODERS") testJointSensors();
     else if (sscanf(cmd.c_str(), "TEST MOTOR %d", &idx) == 1) testSingleMotor(idx);
     else if (cmd == "TEST MAX FORCE FLEXED") testMaxForce(true);
     else if (cmd == "TEST MAX FORCE EXTENDED") testMaxForce(false);

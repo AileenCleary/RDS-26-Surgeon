@@ -19,7 +19,7 @@ uint16_t raw_w[NUM_ENC];
 float jointDegs[NUM_ENC]; // Defined as extern in Globals.h
 
 // Calibration Offsets (Update these based on your physical zero positions)
-float joint_zero_offsets[NUM_ENC] = {-10.7f, 20.67f, 158.73f, -113.0f};
+float joint_zero_offsets[NUM_ENC] = {-9.4f, -25.77f, 386.97f, -132.42f};
 
 // ==============================================================================
 // INITIALIZATION

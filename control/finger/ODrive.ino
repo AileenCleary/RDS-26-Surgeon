@@ -297,3 +297,79 @@ void runSafeHomeCommand() {
   setCurrentMotorPositionsAsZero();
   zeroJoints();
 }
+
+
+void printStatus() {
+  Serial.println("===== Motor Positions =====");
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_feedback) continue;
+    float rawTurns = odrive_data[i].last_feedback.Pos_Estimate;
+    Serial.printf("Motor %d: raw=%.4f, zero=%.4f, target=%.4f\n", i, rawTurns, motor_zero_offsets[i], currentMotorTarget[i]);
+  }
+  Serial.println("===== Joint Angles =====");
+  float* joints = getJointAngles();
+  Serial.printf("Splay: %.2f | MCP: %.2f | PIP: %.2f | DIP: %.2f\n", joints[0], joints[1], joints[2], joints[3]);
+  Serial.println("===== Estimated Tip Position =====");
+  float* tip = EstimateTipPosition(joints);
+  Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", tip[0], tip[1], tip[2]);
+}
+
+
+void printODriveErrors() {
+  Serial.println("===== ODrive Errors =====");
+
+  pumpODriveCAN();
+  delay(50);
+  pumpODriveCAN();
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) {
+      Serial.printf("Node %d: NO HEARTBEAT\n", i);
+      continue;
+    }
+
+    uint8_t state = odrive_data[i].last_heartbeat.Axis_State;
+    uint32_t err = odrive_data[i].last_heartbeat.Axis_Error;
+
+    Serial.printf("Node %d: State = %d | Axis_Error = 0x%08X\n", i, state, err);
+  }
+}
+void clearODriveErrorsAndEnable() {
+  Serial.println("===== Clearing ODrive Errors =====");
+
+  currentMode = MODE_IDLE;
+
+  for (int i = 0; i < NUM_MOTORS; i++) {
+    if (!odrive_data[i].received_heartbeat) {
+      Serial.printf("Node %d: NO HEARTBEAT, skipped.\n", i);
+      continue;
+    }
+
+    odrives[i]->setState(AXIS_STATE_IDLE);
+    delay(20);
+    pumpODriveCAN();
+
+    odrives[i]->clearErrors();
+    delay(50);
+    pumpODriveCAN();
+
+    odrives[i]->setControllerMode(CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH);
+    delay(20);
+    pumpODriveCAN();
+
+    odrives[i]->setLimits(VEL_LIMIT_TURNS_S, I_SOFT_A);
+    delay(20);
+    pumpODriveCAN();
+
+    odrives[i]->setState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+    delay(50);
+    pumpODriveCAN();
+
+    uint8_t state = odrive_data[i].last_heartbeat.Axis_State;
+    uint32_t err = odrive_data[i].last_heartbeat.Axis_Error;
+
+    Serial.printf("Node %d after clear: State = %d | Axis_Error = 0x%08X\n", i, state, err);
+  }
+
+  Serial.println("===== Clear Errors Done =====");
+}

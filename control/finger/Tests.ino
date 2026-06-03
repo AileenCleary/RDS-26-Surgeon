@@ -164,7 +164,7 @@ void testMaxForce(bool isFlexed) {
   }
   
   currentMode = MODE_CONTROL_FORCE;
-  currentForceTarget = 0.0f;
+  currentForceTarget = 5.0f;
   
   unsigned long start = millis();
   unsigned long last_time = millis();
@@ -229,7 +229,7 @@ void testStepForce(float lowN, float highN) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
       float target = currentForceTarget;
-      float actual = getEstimatedTipForceScalar();
+      float actual = useForceSensor ? getForce() : getEstimatedTipForceScalar();
       float error = abs(target - actual);
       
       updateForceControl(dt);
@@ -520,7 +520,6 @@ void testTipPulseToZero() {
   unsigned long test_start = millis();
   unsigned long last_time = millis();
 
-  bool goingToTip = true;
   int last_phase = -1;
 
   while (millis() - test_start < 10000) {

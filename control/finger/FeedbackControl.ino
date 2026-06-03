@@ -3,7 +3,7 @@
 // ==============================================================================
 // OUTER LOOP: JOINT PIDs (Uses MA782 Encoders)
 // ==============================================================================
-bool feedbackEnabled = false; // Default off until sensors are working
+bool feedbackEnabled = true; // Default off until sensors are working
 const float MAX_CORRECTION_DEG = 15.0f; // Max offset the PID can apply
 
 PIDController jointPIDs[3] = {

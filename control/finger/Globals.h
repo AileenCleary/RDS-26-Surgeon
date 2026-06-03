@@ -130,3 +130,6 @@ void calibrateEncoderSplay();
 void calibrateEncoderMCP();
 void calibrateEncoderPIP();
 void calibrateEncoderDIP();
+
+void printODriveErrors();
+void clearODriveErrorsAndEnable();
