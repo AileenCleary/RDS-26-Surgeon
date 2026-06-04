@@ -171,7 +171,7 @@ void testMaxForce(bool isFlexed) {
     runTestDuration(2000); 
   }
   
-  currentMode = MODE_CONTROL_JOINT;
+  currentMode = MODE_CONTROL_FORCE;
   currentForceTarget = 0.0f;
   
   unsigned long start = millis();
@@ -207,6 +207,17 @@ void testMaxForce(bool isFlexed) {
     }
   }
   currentForceTarget = 0.0f;
+  unsigned long release_start = millis();
+  while(millis() - release_start < 2000) { 
+     unsigned long now = millis();
+     if (now - last_time >= 2) {
+       float dt = (now - last_time)/1000.0f; last_time = now;
+       updateForceControl(dt); 
+       updateMotion(dt);
+       for(int i=0; i<NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
+     }
+  }
+
   resetToZero();
 }
 
@@ -217,7 +228,7 @@ void testStepForce(float lowN, float highN) {
   Serial.printf("\n--- TEST: STEP FORCE (%.1fN <-> %.1fN) ---\n", lowN, highN);
   Serial.println("Time(s), Target_Force(N), Actual_Force(N)");
   
-  currentMode = MODE_CONTROL_JOINT;
+  currentMode = MODE_CONTROL_FORCE;
   currentForceTarget = lowN;
   
   unsigned long start = millis();
@@ -271,6 +282,18 @@ void testStepForce(float lowN, float highN) {
       Serial.printf("%.3f, %.2f, %.2f\n", (now-start)/1000.0f, currentForceTarget, actual);
     }
   }
+  currentForceTarget = 0.0f;
+  unsigned long release_start = millis();
+  while(millis() - release_start < 2000) { 
+     unsigned long now = millis();
+     if (now - last_time >= 2) {
+       float dt = (now - last_time)/1000.0f; last_time = now;
+       updateForceControl(dt); 
+       updateMotion(dt);
+       for(int i=0; i<NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
+     }
+  }
+
   resetToZero();
   Serial.printf("Settling Time: %.2fs | Overshoot: %.2f | Steady-State Error: %.2f\n", settling_time, overshoot, ss_error);
 }
@@ -558,6 +581,93 @@ void testSinePosition() {
   
   resetToZero();
   Serial.println("END_DATA");
+}
+
+// ------------------------------------------------------------------
+// ⭐ TEST 7: Sinusoidal Force Control Test (Frequency Response)
+// ------------------------------------------------------------------
+void testSineForce(bool is_high) {
+  float force_offset;
+  float force_amp;
+  if (is_high) {
+    force_offset = 10.0f; 
+    force_amp = 10.0f;    
+  } else {
+    force_offset = 2.0f; 
+    force_amp = 1.0f;    
+  } 
+
+  Serial.printf("\n--- TEST: SINE FORCE SWEEP (%.1f +/- %.1f N) ---\n", force_offset, force_amp);
+  Serial.println("START_DATA");
+  
+  // IMPORTANT: Sync initial position so Admittance Control doesn't jump
+  float currentJoints[4];
+  estimateJointAnglesFromMotors(currentJoints); 
+  currentJointTarget[0] = currentJoints[0];
+  currentJointTarget[1] = currentJoints[1];
+  currentJointTarget[2] = currentJoints[2];
+
+  currentMode = MODE_CONTROL_FORCE;
+  
+  // Chirp Parameters
+  float f0 = 0.1f;        // Start frequency (Hz)
+  float f1 = 100.0f;      // End frequency (Hz)
+  float T = 60.0f;        // Sweep duration (Seconds)
+  
+  // Logarithmic sweep rate constant: k = ln(f1/f0) / T
+  float k = log(f1 / f0) / T;
+  
+  unsigned long start = millis();
+  unsigned long last_time = millis();
+  
+  while (millis() - start < (T * 1000)) {
+    pumpODriveCAN();
+    unsigned long now = millis();
+    
+    // FAST CONTROL LOOP: 2ms (500 Hz) to allow tracking up to 100 Hz
+    if (now - last_time >= 2) {
+      float dt = (now - last_time) / 1000.0f;
+      last_time = now;
+      
+      float t = (now - start) / 1000.0f;
+      
+      // Calculate instantaneous phase for logarithmic chirp
+      float phase = 2.0f * PI * f0 * (exp(k * t) - 1.0f) / k;
+      
+      // Set the target force: F = offset + amp * sin(phase)
+      currentForceTarget = force_offset + force_amp * sin(phase);
+      
+      updateForceControl(dt);
+      updateMotion(dt);
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
+      
+      // Read actual force
+      float actual_force = getForce(); 
+      
+      // Log: Time, Target Force, Actual Force
+      Serial.printf("%.4f,%.3f,%.3f\n", t, currentForceTarget, actual_force); 
+    }
+  }
+  Serial.println("END_DATA");
+  
+  // Slowly release force back to 0 so the tendon doesn't snap
+  currentForceTarget = 0.0f;
+  unsigned long release_start = millis();
+  while(millis() - release_start < 2000) { 
+     unsigned long now = millis();
+     if (now - last_time >= 2) {
+       float dt = (now - last_time)/1000.0f; last_time = now;
+       updateForceControl(dt); 
+       updateMotion(dt);
+       for(int i=0; i<NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
+     }
+  }
+  
+  // Gently reel back to starting position (assuming you added MODE_HOME_SMOOTH earlier)
+  resetToZero();
 }
 
 void testTipPulseToZero() {

@@ -35,6 +35,10 @@ void setupMA782() {
 
   delay(10); // Give the sensors a brief moment to stabilize
 
+  for (int i = 0; i < NUM_ENC; i++) {
+    flushStuckSensor(CS_PINS[i]);
+  }
+
   // Fill buffers with initial actual readings to prevent startup ramp-up
   for (int i = 0; i < NUM_ENC; i++) {
     // 1. Take a single baseline reading for this sensor
@@ -126,4 +130,22 @@ float* EstimateTipPosition(float* jointAngles) {
   tipPos[1] = y;
   tipPos[2] = z;
   return tipPos;
+}
+
+// Call this if you detect an encoder is locked up
+void flushStuckSensor(int cs_pin) {
+  SPI.beginTransaction(ma782_spi_settings);
+  
+  digitalWrite(cs_pin, LOW);
+  delayMicroseconds(10); 
+  
+  SPI.transfer16(0x0000);
+  SPI.transfer16(0x0000);
+  
+  delayMicroseconds(10);
+  
+  digitalWrite(cs_pin, HIGH);
+  SPI.endTransaction();
+  
+  delay(1); 
 }

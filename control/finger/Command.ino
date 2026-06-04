@@ -129,7 +129,7 @@ void handleCommand() {
       }
     }
     else if (sscanf(cmd.c_str(), "MOVE FORCE %f", &v0) == 1) {
-      currentMode = MODE_CONTROL_JOINT;
+      currentMode = MODE_CONTROL_FORCE;
       currentForceTarget = v0;
       Serial.printf("ACK: Force Target set to %.2f N\n", v0);
     }
@@ -191,6 +191,8 @@ void handleCommand() {
     else if (cmd == "TEST STEP POS") testStepPosition();
     else if (cmd == "TEST TRAJ") testTrajectory();
     else if (cmd == "TEST SINE POS") testSinePosition();
+    else if (cmd == "TEST SINE FORCE LOW") testSineForce(false);
+    else if (cmd == "TEST SINE FORCE HIGH") testSineForce(true);
     else if (cmd == "TEST TIP PULSE") testTipPulseToZero();
   }
   else if (cmd.startsWith("CALIBRATE ENCODER ")) {

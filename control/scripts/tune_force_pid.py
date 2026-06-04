@@ -7,11 +7,11 @@ COM_PORT = '/dev/cu.usbmodem176147301'
 BAUD_RATE = 115200
 
 # The force we want the finger to exert (in Newtons)
-STEP_TARGET_FORCE = 5.0 
+STEP_TARGET_FORCE = 20.0 
 
 # List of Force PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
-    (0.0115, 0.00007, 0.00022),
+    (10.0, 0.0, 0.1),
 ]
 # ---------------------
 
@@ -98,6 +98,8 @@ for (p, i, d) in PID_TEST_SETS:
 
 # Final safety release
 ser.write(f"MOVE FORCE 0\n".encode())
+time.sleep(0.5)
+ser.write(f"MOVE MOTOR 0 0 0 0 0\n".encode())
 time.sleep(0.5)
 ser.close()
 
