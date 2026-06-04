@@ -166,8 +166,8 @@ void testMaxForce(bool isFlexed) {
 
   if (isFlexed) {
     currentMode = MODE_CONTROL_JOINT;
-    currentJointTarget[1] = -45.0f; 
-    currentJointTarget[2] = -45.0f;
+    currentJointTarget[1] = -10.0f; 
+    currentJointTarget[2] = -20.0f;
     runTestDuration(2000); 
   }
   
@@ -749,5 +749,183 @@ void testTipPulseToZero() {
   }
 
   Serial.println("Finished pulse test. Returning to zero...");
+  resetToZero();
+}
+
+// ------------------------------------------------------------------
+// ⭐ TEST 8: Variable Force Shading (Hybrid Control)
+// ------------------------------------------------------------------
+void testShadeSquare() {
+  Serial.println("\n--- TEST: SHADE SQUARE (INCREASING FORCE) ---");
+  Serial.println("START_DRAW_DATA");
+  
+  float base_x = 75.0f; 
+  float base_y = -10.0f; 
+  float start_z = -60.0f; // Start hovering above paper
+  
+  // 1. Move to starting position
+  currentMode = MODE_CONTROL_JOINT; 
+  float initial_tip[3] = {base_x, base_y, start_z};
+  calculateJointAngles(initial_tip, currentJointTarget);
+  runTestDuration(1500);
+
+  unsigned long start = millis();
+  unsigned long last_time = millis();
+  
+  int num_lines = 15;
+  float length = 20.0f; 
+  float width = 20.0f;  
+  float duration = 15.0f; 
+  
+  while (millis() - start < (duration * 1000)) {
+    pumpODriveCAN();
+    unsigned long now = millis();
+    if (now - last_time >= 20) { 
+      float dt = (now - last_time) / 1000.0f;
+      last_time = now;
+      float t = (now - start) / 1000.0f;
+      
+      float progress = t / duration;
+      int current_line = (int)(progress * num_lines);
+      float line_progress = (progress * num_lines) - current_line;
+      
+      // Step A: Calculate desired XY Path
+      float target_x = base_x;
+      if (current_line % 2 == 0) target_x += line_progress * length;
+      else target_x += (1.0f - line_progress) * length;
+      float target_y = base_y + (current_line * (width / num_lines));
+      
+      // Step B: Pure Kinematic XY Update
+      // Find out what Z-depth the force controller is currently at
+      float current_tip[3];
+      getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
+      
+      // Update IK target for X and Y, but KEEP Z exactly where the force controller left it
+      float target_tip[3] = {target_x, target_y, current_tip[2]};
+      calculateJointAngles(target_tip, currentJointTarget);
+      
+      // Step C: Apply Jacobian Admittance Force Control
+      currentForceTarget = progress * 15.0f; // Ramp force up to 15N
+      
+      // Temporarily switch mode so the guard in updateForceControl allows it to run
+      currentMode = MODE_CONTROL_FORCE; 
+      updateForceControl(dt); // Modifies currentJointTarget along the sensor normal vector
+      currentMode = MODE_CONTROL_JOINT; 
+      
+      // Execute
+      updateMotion(dt);
+      for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
+      
+      // Logging
+      float* joints = getJointAngles();
+      float actual_tip[3];
+      getPencilForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      float actual_force = getEstimatedTipForceScalar();
+      
+      Serial.printf("DRAW_DATA %.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        t, target_x, target_y, currentForceTarget, 
+        actual_tip[0], actual_tip[1], actual_force,
+        currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], currentJointTarget[3],
+        joints[0], joints[1], joints[2], joints[3]
+      );
+    }
+  }
+  Serial.println("END_DRAW_DATA");
+  resetToZero();
+}
+
+// ------------------------------------------------------------------
+// ⭐ TEST 9: Write Letter
+// ------------------------------------------------------------------
+void testWriteLetter(char letter) {
+  Serial.printf("\n--- TEST: WRITE LETTER '%c' ---\n", letter);
+  Serial.println("START_DRAW_DATA");
+  
+  float pts[20][2];
+  int num_pts = getLetterPoints(letter, pts);
+  if (num_pts == 0) {
+    Serial.println("Letter not supported!");
+    return;
+  }
+  
+  float base_x = 45.0f;
+  float base_y = 10.0f;
+  float start_z = -55.0f; // Start hovering above paper
+  float scale = 20.0f; 
+  float stroke_time = 1.5f; 
+  
+  // 1. Move to starting position
+  currentMode = MODE_CONTROL_JOINT; 
+  float initial_tip[3] = {base_x, base_y, start_z};
+  calculateJointAngles(initial_tip, currentJointTarget);
+  runTestDuration(1500);
+
+  unsigned long start = millis();
+  unsigned long last_time = millis();
+  int current_pt = 0;
+  float start_t = 0;
+  
+  while (current_pt < num_pts - 1) {
+    pumpODriveCAN();
+    unsigned long now = millis();
+    if (now - last_time >= 20) {
+      float dt = (now - last_time) / 1000.0f;
+      last_time = now;
+      float t = (now - start) / 1000.0f;
+      
+      float local_t = t - start_t;
+      if (local_t >= stroke_time) {
+        current_pt++;
+        start_t = t;
+        local_t = 0;
+        if (current_pt >= num_pts - 1) break;
+      }
+      
+      // Step A: Calculate desired XY Path
+      float alpha = local_t / stroke_time;
+      float p1_y = pts[current_pt][0] * scale;
+      float p1_x = pts[current_pt][1] * scale;
+      float p2_y = pts[current_pt+1][0] * scale;
+      float p2_x = pts[current_pt+1][1] * scale;
+      
+      float target_x = base_x + p1_x + alpha * (p2_x - p1_x);
+      float target_y = base_y - (p1_y + alpha * (p2_y - p1_y));
+      
+      // Step B: Pure Kinematic XY Update
+      float current_tip[3];
+      getForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
+      
+      // Update IK target for X and Y, but KEEP Z exactly where the force controller left it
+      float target_tip[3] = {target_x, target_y, current_tip[2]};
+      calculateJointAngles(target_tip, currentJointTarget);
+      
+      // Step C: Apply Jacobian Admittance Force Control
+      currentForceTarget = 4.0f; // Target a constant 4 Newtons while writing
+      
+      // Temporarily switch mode so the guard in updateForceControl allows it to run
+      // currentMode = MODE_CONTROL_FORCE; 
+      // updateForceControl(dt); // Modifies currentJointTarget along the sensor normal vector
+      currentMode = MODE_CONTROL_JOINT; 
+      
+      // Execute
+      updateMotion(dt);
+      for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
+      
+      // Logging
+      float joints[4];
+      estimateJointAnglesFromMotors(joints);
+      float actual_tip[3];
+      getForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+      float actual_force = getForce();
+      
+      Serial.printf("DRAW_DATA %.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        t, target_x, target_y, currentForceTarget, 
+        actual_tip[0], actual_tip[1], actual_force,
+        currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], currentJointTarget[3],
+        joints[0], joints[1], joints[2], joints[3]
+      );
+    }
+  }
+  Serial.println("END_DRAW_DATA");
   resetToZero();
 }

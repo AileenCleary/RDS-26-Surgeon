@@ -7,7 +7,7 @@ COM_PORT = '/dev/cu.usbmodem176147301'
 BAUD_RATE = 115200
 
 # The force we want the finger to exert (in Newtons)
-STEP_TARGET_FORCE = 20.0 
+STEP_TARGET_FORCE = 5.0 
 
 # List of Force PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
@@ -31,9 +31,8 @@ print("WARNING: Ensure the finger is resting against a hard surface!")
 print("Force control in free air will cause the finger to snap to its mechanical limits.")
 time.sleep(3)
 
-# 1. Optionally, enable the physical force sensor if you have one
-# ser.write(b"FORCE SENSOR ON\n")
-# time.sleep(0.5)
+ser.write(f"PID OFF\n".encode())
+time.sleep(0.5)
 
 # --- AUTOMATED TESTING LOOP ---
 for (p, i, d) in PID_TEST_SETS:
@@ -98,7 +97,7 @@ for (p, i, d) in PID_TEST_SETS:
 
 # Final safety release
 ser.write(f"MOVE FORCE 0\n".encode())
-time.sleep(0.5)
+time.sleep(1.0)
 ser.write(f"MOVE MOTOR 0 0 0 0 0\n".encode())
 time.sleep(0.5)
 ser.close()

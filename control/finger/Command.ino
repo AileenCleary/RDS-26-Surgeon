@@ -65,6 +65,7 @@ void handleCommand() {
   char type[10];
   float v0, v1, v2, v3, v4; 
   int idx;
+  char letter;
   
   // ---------------------------------------------------------
   // MOVE COMMANDS
@@ -194,6 +195,14 @@ void handleCommand() {
     else if (cmd == "TEST SINE FORCE LOW") testSineForce(false);
     else if (cmd == "TEST SINE FORCE HIGH") testSineForce(true);
     else if (cmd == "TEST TIP PULSE") testTipPulseToZero();
+    else if (cmd == "TEST SHADE") testShadeSquare();
+    else if (sscanf(cmd.c_str(), "TEST WRITE %c", &letter) == 1) {
+      if (letter >= 'A' && letter <= 'Z') {
+        testWriteLetter(letter);
+      } else {
+        Serial.println("ERROR: Invalid letter. Use A-Z.");
+      }
+    }
   }
   else if (cmd.startsWith("CALIBRATE ENCODER ")) {
     enableAllMotors();

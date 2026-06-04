@@ -11,6 +11,8 @@ float* EstimateTipPosition(float* tip_out);
 #define IS_TEENSY_BUILTIN
 #include "ODriveCAN.h"
 #include "ODriveFlexCAN.hpp"
+#include <string.h>
+
 void testTipPulseToZero();
 // Hardware Constants
 #define NUM_MOTORS 5
@@ -110,6 +112,8 @@ void handleCommand();
 
 void updateForceControl(float dt);
 
+extern const float DIP_COUPLING_RATIO;
+
 void estimateJointAnglesFromMotors(float* joints_out);
 void calculateMotorAngles(float* joints, float* motorAngles_out);
 void calculateJointAngles(float* target, float* joints_out);
@@ -117,6 +121,8 @@ void getForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, f
 float getEstimatedTipForceScalar();
 void calculateJacobian(float J_out[3][3]);
 void mapJointTorquesToMotorTorques(float* tau_joint, float* tau_motor_out);
+void getPencilForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out);
+int getLetterPoints(char letter, float out_pts[20][2]);
 
 // Test Functions
 void testSingleMotor(int motorIndex);
@@ -127,6 +133,14 @@ void testJointPIP();
 void testDemo();
 void testForceSensor();
 void testJointSensors();
+void testMaxForce(bool isFlexed);
+void testStepForce(float lowN, float highN);
+void testStepPosition();
+void testTrajectory();
+void testSinePosition();
+void testSineForce(bool is_high);
+void testShadeSquare();
+void testWriteLetter(char letter);
 void calibrateEncoderSplay();
 void calibrateEncoderMCP();
 void calibrateEncoderPIP();

@@ -5,6 +5,7 @@ const float L_SPLAY = 24.0f;
 const float L_MCP = 44.0f;
 const float L_PIP = 39.0f;
 const float L_DIP = 22.0f;
+const float L_PENCIL = 25.0f;
 
 const float R_TENDON = 0.2794f;
 const float R_PULLEY_SPLAY = 9.0f + R_TENDON;
@@ -261,4 +262,84 @@ float getEstimatedTipForceScalar() {
     return abs(tau_joint[2] / J[2][2]);
   }
   return 0.0f;
+}
+
+// --- ADD THIS TO YOUR KINEMATICS SECTION ---
+// Calculate tip of the pencil (offset perpendicularly from the DIP link)
+void getPencilForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out) {
+  float q_dip_deg = q_pip_deg * DIP_COUPLING_RATIO;
+  
+  float a1 = q_mcp_deg * DEG_TO_RAD;
+  float a2 = (q_mcp_deg + q_pip_deg) * DEG_TO_RAD;
+  float a3 = (q_mcp_deg + q_pip_deg + q_dip_deg) * DEG_TO_RAD;
+  float a4 = (q_mcp_deg + q_pip_deg + q_dip_deg - 90) * DEG_TO_RAD;
+  float splay_rad = q_splay_deg * DEG_TO_RAD;
+  
+  float x_planar = L_SPLAY + L_MCP * cos(a1) + L_PIP * cos(a2) + L_DIP * cos(a3) + L_PENCIL * cos(a4);
+  float z_planar = L_MCP * sin(a1) + L_PIP * sin(a2) + L_DIP * sin(a3) + L_PENCIL * sin(a4);
+  
+  tip_out[0] = L_SPLAY + L_MCP + L_PIP + L_DIP - (x_planar * cos(splay_rad));
+  tip_out[1] = x_planar * sin(splay_rad);
+  tip_out[2] = z_planar;
+}
+
+int getLetterPoints(char letter, float out_pts[20][2]) {
+  letter = toupper(letter); // Ensure uppercase
+  
+  switch(letter) {
+    case 'A': { float pts[5][2] = {{0, 0}, {0.5, 1}, {1, 0}, {0.75, 0.5}, {0.25, 0.5}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'B': { float pts[10][2] = {{0, 0}, {0, 1}, {0.75, 1}, {1, 0.75}, {0.75, 0.5}, {0, 0.5}, {0.75, 0.5}, {1, 0.25}, {0.75, 0}, {0, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 10; }
+    case 'C': { float pts[6][2] = {{1, 1}, {0.25, 1}, {0, 0.75}, {0, 0.25}, {0.25, 0}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'D': { float pts[7][2] = {{0, 0}, {0, 1}, {0.75, 1}, {1, 0.75}, {1, 0.25}, {0.75, 0}, {0, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 7; }
+    case 'E': { float pts[7][2] = {{1, 1}, {0, 1}, {0, 0.5}, {0.75, 0.5}, {0, 0.5}, {0, 0}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 7; }
+    case 'F': { float pts[6][2] = {{0, 0}, {0, 1}, {1, 1}, {0, 1}, {0, 0.5}, {0.75, 0.5}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'G': { float pts[8][2] = {{1, 1}, {0.25, 1}, {0, 0.75}, {0, 0.25}, {0.25, 0}, {1, 0}, {1, 0.5}, {0.5, 0.5}};
+                memcpy(out_pts, pts, sizeof(pts)); return 8; }
+    case 'H': { float pts[6][2] = {{0, 1}, {0, 0}, {0, 0.5}, {1, 0.5}, {1, 1}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'I': { float pts[6][2] = {{0.25, 1}, {0.75, 1}, {0.5, 1}, {0.5, 0}, {0.25, 0}, {0.75, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'J': { float pts[5][2] = {{0, 0.5}, {0.25, 0}, {0.75, 0}, {1, 0.25}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'K': { float pts[6][2] = {{0, 1}, {0, 0}, {0, 0.5}, {1, 1}, {0, 0.5}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'L': { float pts[3][2] = {{0, 1}, {0, 0}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 3; }
+    case 'M': { float pts[5][2] = {{0, 0}, {0, 1}, {0.5, 0.5}, {1, 1}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'N': { float pts[4][2] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 4; }
+    case 'O': { float pts[9][2] = {{0.5, 1}, {0.2, 0.8}, {0, 0.5}, {0.2, 0.2}, {0.5, 0}, {0.8, 0.2}, {1, 0.5}, {0.8, 0.8}, {0.5, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 9; }
+    case 'P': { float pts[6][2] = {{0, 0}, {0, 1}, {0.75, 1}, {1, 0.75}, {0.75, 0.5}, {0, 0.5}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'Q': { float pts[11][2] = {{0.8, 0.2}, {1, 0.5}, {0.8, 0.8}, {0.5, 1}, {0.2, 0.8}, {0, 0.5}, {0.2, 0.2}, {0.5, 0}, {0.8, 0.2}, {0.5, 0.5}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 11; }
+    case 'R': { float pts[8][2] = {{0, 0}, {0, 1}, {0.75, 1}, {1, 0.75}, {0.75, 0.5}, {0, 0.5}, {0.5, 0.5}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 8; }
+    case 'S': { float pts[8][2] = {{1, 1}, {0.25, 1}, {0, 0.75}, {0.25, 0.5}, {0.75, 0.5}, {1, 0.25}, {0.75, 0}, {0, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 8; }
+    case 'T': { float pts[4][2] = {{0, 1}, {1, 1}, {0.5, 1}, {0.5, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 4; }
+    case 'U': { float pts[6][2] = {{0, 1}, {0, 0.25}, {0.25, 0}, {0.75, 0}, {1, 0.25}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 6; }
+    case 'V': { float pts[3][2] = {{0, 1}, {0.5, 0}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 3; }
+    case 'W': { float pts[5][2] = {{0, 1}, {0.25, 0}, {0.5, 0.5}, {0.75, 0}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'X': { float pts[5][2] = {{0, 1}, {1, 0}, {0.5, 0.5}, {0, 0}, {1, 1}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'Y': { float pts[5][2] = {{0, 1}, {0.5, 0.5}, {1, 1}, {0.5, 0.5}, {0.5, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 5; }
+    case 'Z': { float pts[4][2] = {{0, 1}, {1, 1}, {0, 0}, {1, 0}};
+                memcpy(out_pts, pts, sizeof(pts)); return 4; }
+  }
+  
+  return 0; // Invalid character
 }
