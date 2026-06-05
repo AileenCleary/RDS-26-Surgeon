@@ -759,17 +759,16 @@ void testShadeSquare() {
   Serial.println("\n--- TEST: SHADE SQUARE (INCREASING FORCE) ---");
   Serial.println("START_DRAW_DATA");
   
-  float base_x = 45.0f; 
-  float base_y = -10.0f; 
-  float start_z = -55.0f; // Start hovering above paper
+  float base_x = 35.0f;
+  float base_y = 10.0f;
+  float base_z = -66.0f;
+  float tan_30 = tan(30.0f * PI / 180.0f);
   
   // 1. Move to starting position
   currentMode = MODE_CONTROL_JOINT; 
-  float initial_base[3] = {base_x, base_y, start_z};
-  calculateJointAngles(initial_base, currentJointTarget);
+  float initial_tip[3] = {base_x, base_y, base_z};
+  calculateJointAnglesFromPencil(initial_tip, currentJointTarget);
   runTestDuration(1500);
-  float initial_tip[3];
-  getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], initial_tip);
 
 
   unsigned long start = millis();
@@ -794,9 +793,10 @@ void testShadeSquare() {
       
       // Step A: Calculate desired XY Path
       float target_x = base_x;
-      if (current_line % 2 == 0) target_x += line_progress * length;
-      else target_x += (1.0f - line_progress) * length;
-      float target_y = base_y + (current_line * (width / num_lines));
+      if (current_line % 2 == 0) target_x -= line_progress * length;
+      else target_x -= (1.0f - line_progress) * length;
+      float target_y = base_y - (current_line * (width / num_lines));
+      float target_z = base_z + (progress)*4.0 + (tan_30 * (target_x - base_x));
       
       // Step B: Pure Kinematic XY Update
       // Find out what Z-depth the force controller is currently at
@@ -804,17 +804,18 @@ void testShadeSquare() {
       getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
       
       // Update IK target for X and Y, but KEEP Z exactly where the force controller left it
-      float target_tip[3] = {target_x, target_y, current_tip[2]};
+      float target_tip[3] = {target_x, target_y, target_z};
       calculateJointAnglesFromPencil(target_tip, currentJointTarget);
       
       // Execute
       updateMotion(dt);
-      currentForceTarget = progress * 4.0f;
+      currentForceTarget = 0.0f;
       updateForceControl(dt);
       for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
       
       // Logging
-      float* joints = getJointAngles();
+      float joints[NUM_ENC];
+      estimateJointAnglesFromMotors(joints);
       float actual_tip[3];
       getPencilForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
       float actual_force = getForce();
@@ -845,9 +846,9 @@ void testWriteLetter(char letter) {
   }
 
   // Keep base fixed. This is the paper / canvas reference point.
-  float base_x = 35.0f;
+  float base_x = 45.0f;
   float base_y = 10.0f;
-  float base_z = -70.0f;
+  float base_z = -62.23f;
   float scale = 20.0f;
   float stroke_time = 1.5f;
   float tan_30 = tan(30.0f * PI / 180.0f);
