@@ -15,6 +15,8 @@ def trigger_and_record(test_command):
     
     with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
         time.sleep(2) # Wait for connection
+        ser.write(('PID OFF\n').encode())
+        time.sleep(0.5)
         
         print(f"Sending command: {test_command}")
         ser.write((test_command + '\n').encode())
