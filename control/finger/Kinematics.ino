@@ -5,7 +5,7 @@ const float L_SPLAY = 24.0f;
 const float L_MCP = 44.0f;
 const float L_PIP = 39.0f;
 const float L_DIP = 22.0f;
-const float L_PENCIL = 25.0f;
+const float L_PENCIL = 38.97f;
 
 const float R_TENDON = 0.2794f;
 const float R_PULLEY_SPLAY = 9.0f + R_TENDON;

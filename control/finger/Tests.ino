@@ -845,19 +845,18 @@ void testWriteLetter(char letter) {
     return;
   }
   
-  float base_x = 45.0f;
+  float base_x = 35.0f;
   float base_y = 10.0f;
-  float start_z = -55.0f; // Start hovering above paper
+  float base_z = -70.0f; // Start hovering above paper
   float scale = 20.0f; 
   float stroke_time = 1.5f; 
+  float tan_30 = tan(30.0f * PI / 180.0f);
   
   // 1. Move to starting position
   currentMode = MODE_CONTROL_JOINT; 
-  float initial_base[3] = {base_x, base_y, start_z};
-  calculateJointAngles(initial_base, currentJointTarget);
+  float initial_tip[3] = {base_x, base_y, base_z};
+  calculateJointAnglesFromPencil(initial_tip, currentJointTarget);
   runTestDuration(1500);
-  float initial_tip[3];
-  getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], initial_tip);
 
   unsigned long start = millis();
   unsigned long last_time = millis();
@@ -887,19 +886,19 @@ void testWriteLetter(char letter) {
       float p2_y = pts[current_pt+1][0] * scale;
       float p2_x = pts[current_pt+1][1] * scale;
       
-      float target_x = base_x + p1_x + alpha * (p2_x - p1_x);
+      float target_x = base_x - (p1_x + alpha * (p2_x - p1_x));
       float target_y = base_y - (p1_y + alpha * (p2_y - p1_y));
+      float target_z = base_z + (tan_30 * (target_x - base_x));
       
       // Step B: Pure Kinematic XY Update
       float current_tip[3];
       getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
       
-      // Update IK target for X and Y, but KEEP Z exactly where the force controller left it
-      float target_tip[3] = {target_x, target_y, current_tip[2]};
+      float target_tip[3] = {target_x, target_y, target_z};
       calculateJointAnglesFromPencil(target_tip, currentJointTarget);
       
       updateMotion(dt);
-      currentForceTarget = 1.5f; 
+      currentForceTarget = 0.0f; 
       updateForceControl(dt);
       for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
       

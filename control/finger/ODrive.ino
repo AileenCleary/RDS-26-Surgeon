@@ -309,7 +309,8 @@ void printStatus() {
     Serial.printf("Motor %d: raw=%.4f, zero=%.4f, target=%.4f\n", i, rawTurns, motor_zero_offsets[i], currentMotorTarget[i]);
   }
   Serial.println("===== Joint Angles =====");
-  float* joints = getJointAngles();
+  float joints[NUM_ENC];
+  estimateJointAnglesFromMotors(joints);
   Serial.printf("Splay: %.2f | MCP: %.2f | PIP: %.2f | DIP: %.2f\n", joints[0], joints[1], joints[2], joints[3]);
   Serial.println("===== Estimated Tip Position =====");
   float* tip = EstimateTipPosition(joints);

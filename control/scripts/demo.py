@@ -73,8 +73,8 @@ def plot_results(log, title):
     ax1 = plt.subplot(2, 2, 1)
     # sc = ax1.scatter(x_act, y_act, c=f_act, cmap='Greys', s=20, edgecolor='none', vmin=0, vmax=np.max(f_act)+1.0)
     # plt.colorbar(sc, ax=ax1, label='Normal Force (N)')
-    sc = ax1.scatter(-y_act, x_act)
-    ax1.plot(-y_des, x_des, color='blue', linestyle='--', alpha=0.3, label='Desired Path')
+    sc = ax1.scatter(-y_act, -x_act)
+    ax1.plot(-y_des, -x_des, color='blue', linestyle='--', alpha=0.3, label='Desired Path')
     ax1.set_title("Physical Drawing Canvas (Planar X vs Splay Y)")
     ax1.set_xlabel("X (Forward/Back) mm")
     ax1.set_ylabel("Y (Splay Left/Right) mm")
@@ -119,11 +119,12 @@ def plot_results(log, title):
     plt.show()
 
 if __name__ == "__main__":
-    choice = input("Select Test [1: Write 'R', 2: Shade Square]: ").strip()
+    letter = "L"
+    choice = input(f"Select Test [1: Write '{letter}', 2: Shade Square]: ").strip()
     
     if choice == '1':
-        telemetry = trigger_and_record("TEST WRITE R")
-        plot_results(telemetry, "Physical Test: Writing Letter 'R'")
+        telemetry = trigger_and_record(f"TEST WRITE {letter}")
+        plot_results(telemetry, "Physical Test: Writing Letter '{letter}'")
     elif choice == '2':
         telemetry = trigger_and_record("TEST SHADE")
         plot_results(telemetry, "Physical Test: Variable Force Shading")
