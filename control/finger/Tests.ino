@@ -759,16 +759,17 @@ void testShadeSquare() {
   Serial.println("\n--- TEST: SHADE SQUARE (INCREASING FORCE) ---");
   Serial.println("START_DRAW_DATA");
   
-  float base_x = 35.0f;
-  float base_y = 10.0f;
-  float base_z = -70.0f;
-  float tan_30 = tan(30.0f * PI / 180.0f);
+  float base_x = 45.0f; 
+  float base_y = -10.0f; 
+  float start_z = -55.0f; // Start hovering above paper
   
   // 1. Move to starting position
   currentMode = MODE_CONTROL_JOINT; 
-  float initial_tip[3] = {base_x, base_y, base_z};
-  calculateJointAnglesFromPencil(initial_tip, currentJointTarget);
+  float initial_base[3] = {base_x, base_y, start_z};
+  calculateJointAngles(initial_base, currentJointTarget);
   runTestDuration(1500);
+  float initial_tip[3];
+  getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], initial_tip);
 
 
   unsigned long start = millis();
@@ -793,10 +794,9 @@ void testShadeSquare() {
       
       // Step A: Calculate desired XY Path
       float target_x = base_x;
-      if (current_line % 2 == 0) target_x -= line_progress * length;
-      else target_x -= (1.0f - line_progress) * length;
-      float target_y = base_y - (current_line * (width / num_lines));
-      float target_z = base_z + (current_line / num_lines)*4.0 + (tan_30 * (target_x - base_x));
+      if (current_line % 2 == 0) target_x += line_progress * length;
+      else target_x += (1.0f - line_progress) * length;
+      float target_y = base_y + (current_line * (width / num_lines));
       
       // Step B: Pure Kinematic XY Update
       // Find out what Z-depth the force controller is currently at
@@ -804,12 +804,12 @@ void testShadeSquare() {
       getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
       
       // Update IK target for X and Y, but KEEP Z exactly where the force controller left it
-      float target_tip[3] = {target_x, target_y, target_z};
+      float target_tip[3] = {target_x, target_y, current_tip[2]};
       calculateJointAnglesFromPencil(target_tip, currentJointTarget);
       
       // Execute
       updateMotion(dt);
-      currentForceTarget = 0.0f;
+      currentForceTarget = progress * 4.0f;
       updateForceControl(dt);
       for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
       
@@ -836,87 +836,137 @@ void testShadeSquare() {
 // ------------------------------------------------------------------
 void testWriteLetter(char letter) {
   Serial.printf("\n--- TEST: WRITE LETTER '%c' ---\n", letter);
-  Serial.println("START_DRAW_DATA");
-  
+
   float pts[20][2];
   int num_pts = getLetterPoints(letter, pts);
   if (num_pts == 0) {
     Serial.println("Letter not supported!");
     return;
   }
-  
+
+  // Keep base fixed. This is the paper / canvas reference point.
   float base_x = 35.0f;
   float base_y = 10.0f;
-  float base_z = -70.0f; // Start hovering above paper
-  float scale = 20.0f; 
-  float stroke_time = 1.5f; 
+  float base_z = -70.0f;
+  float scale = 20.0f;
+  float stroke_time = 1.5f;
   float tan_30 = tan(30.0f * PI / 180.0f);
-  
-  // 1. Move to starting position
-  currentMode = MODE_CONTROL_JOINT; 
-  float initial_tip[3] = {base_x, base_y, base_z};
+
+
+  // ------------------------------------------------------------------
+  // 1. Compute the real 3D start point of this specific letter.
+  //    Do NOT move to base. Base is only a coordinate reference.
+  // ------------------------------------------------------------------
+  float start_p_y = pts[0][0] * scale;
+  float start_p_x = pts[0][1] * scale;
+
+  float start_x = base_x - start_p_x;
+  float start_y = base_y - start_p_y;
+  float start_z = base_z + (tan_30 * (start_x - base_x));
+
+  Serial.printf(
+    "Letter start point: x=%.2f, y=%.2f, z=%.2f\n",
+    start_x, start_y, start_z
+  );
+
+  // ------------------------------------------------------------------
+  // 2. From home / current position, directly move to the letter start point.
+  //    This movement is NOT recorded as drawing data.
+  // ------------------------------------------------------------------
+  currentMode = MODE_CONTROL_JOINT;
+
+  float initial_tip[3] = {start_x, start_y, start_z};
   calculateJointAnglesFromPencil(initial_tip, currentJointTarget);
+
   runTestDuration(1500);
+
+  // ------------------------------------------------------------------
+  // 3. Now start recording. The first recorded path segment starts from
+  //    pts[0] to pts[1], not from base to pts[0].
+  // ------------------------------------------------------------------
+  Serial.println("START_DRAW_DATA");
 
   unsigned long start = millis();
   unsigned long last_time = millis();
+
   int current_pt = 0;
-  float start_t = 0;
-  
+  float start_t = 0.0f;
+
   while (current_pt < num_pts - 1) {
     pumpODriveCAN();
+
     unsigned long now = millis();
+
     if (now - last_time >= 20) {
       float dt = (now - last_time) / 1000.0f;
       last_time = now;
+
       float t = (now - start) / 1000.0f;
-      
+
       float local_t = t - start_t;
+
       if (local_t >= stroke_time) {
         current_pt++;
         start_t = t;
-        local_t = 0;
+        local_t = 0.0f;
+
         if (current_pt >= num_pts - 1) break;
       }
-      
-      // Step A: Calculate desired XY Path
+
+      // Interpolate between current letter point and next letter point.
       float alpha = local_t / stroke_time;
+
       float p1_y = pts[current_pt][0] * scale;
       float p1_x = pts[current_pt][1] * scale;
-      float p2_y = pts[current_pt+1][0] * scale;
-      float p2_x = pts[current_pt+1][1] * scale;
-      
+      float p2_y = pts[current_pt + 1][0] * scale;
+      float p2_x = pts[current_pt + 1][1] * scale;
+
       float target_x = base_x - (p1_x + alpha * (p2_x - p1_x));
       float target_y = base_y - (p1_y + alpha * (p2_y - p1_y));
       float target_z = base_z + (tan_30 * (target_x - base_x));
-      
-      // Step B: Pure Kinematic XY Update
-      float current_tip[3];
-      getPencilForwardKinematics(currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], current_tip);
-      
+
       float target_tip[3] = {target_x, target_y, target_z};
       calculateJointAnglesFromPencil(target_tip, currentJointTarget);
-      
+
       updateMotion(dt);
-      currentForceTarget = 0.0f; 
+
+      currentForceTarget = 0.0f;
       updateForceControl(dt);
-      for (int i = 0; i < NUM_MOTORS; i++) setMotorTorque(i, commanded_torque[i]);
-      
+
+      for (int i = 0; i < NUM_MOTORS; i++) {
+        setMotorTorque(i, commanded_torque[i]);
+      }
+
       // Logging
       float joints[4];
       estimateJointAnglesFromMotors(joints);
+
       float actual_tip[3];
       getPencilForwardKinematics(joints[0], joints[1], joints[2], actual_tip);
+
       float actual_force = getForce();
-      
-      Serial.printf("DRAW_DATA %.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-        t, target_x, target_y, currentForceTarget, 
-        actual_tip[0], actual_tip[1], actual_force,
-        currentJointTarget[0], currentJointTarget[1], currentJointTarget[2], currentJointTarget[3],
-        joints[0], joints[1], joints[2], joints[3]
+
+      Serial.printf(
+        "DRAW_DATA %.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        t,
+        target_x,
+        target_y,
+        currentForceTarget,
+        actual_tip[0],
+        actual_tip[1],
+        actual_force,
+        currentJointTarget[0],
+        currentJointTarget[1],
+        currentJointTarget[2],
+        currentJointTarget[3],
+        joints[0],
+        joints[1],
+        joints[2],
+        joints[3]
       );
     }
   }
+
   Serial.println("END_DRAW_DATA");
   resetToZero();
 }
