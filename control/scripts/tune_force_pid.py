@@ -11,7 +11,7 @@ STEP_TARGET_FORCE = 5.0
 
 # List of Force PID tuples to test: (P, I, D)
 PID_TEST_SETS = [
-    (10.0, 0.0, 0.1),
+    (2.0, 0.2, 0.1),
 ]
 # ---------------------
 

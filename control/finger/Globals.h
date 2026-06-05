@@ -69,6 +69,8 @@ extern float currentForceTarget;
 extern float force_Kp;
 extern float force_Ki;
 extern float force_Kd;
+extern float force_prev_error;
+extern float force_integral;
 extern bool useForceSensor; // Toggles between A101 and Kinematic Estimation
 
 // --- OUTER LOOP: Joint Position PID Control (Tunable) ---
@@ -122,6 +124,7 @@ float getEstimatedTipForceScalar();
 void calculateJacobian(float J_out[3][3]);
 void mapJointTorquesToMotorTorques(float* tau_joint, float* tau_motor_out);
 void getPencilForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_deg, float* tip_out);
+void getFeedforwardMotorTorques(float Fz_N, float* tau_motor_out);
 int getLetterPoints(char letter, float out_pts[20][2]);
 
 // Test Functions

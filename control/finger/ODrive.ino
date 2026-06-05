@@ -68,7 +68,9 @@ void setupODrive() {
 
   Serial.println("Waiting for ODrives to wake up...");
   for (int i = 0; i < NUM_MOTORS; i++) {
-    while (!odrive_data[i].received_heartbeat) { pumpODriveCAN(); }
+    while (!odrive_data[i].received_heartbeat) {  
+      pumpODriveCAN();
+    }
   }
 
   Serial.println("Configuring Pure Torque Control...");

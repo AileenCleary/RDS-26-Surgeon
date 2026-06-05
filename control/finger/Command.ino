@@ -130,6 +130,8 @@ void handleCommand() {
       }
     }
     else if (sscanf(cmd.c_str(), "MOVE FORCE %f", &v0) == 1) {
+      force_integral = 0.0f;
+      force_prev_error = 0.0f;
       currentMode = MODE_CONTROL_FORCE;
       currentForceTarget = v0;
       Serial.printf("ACK: Force Target set to %.2f N\n", v0);

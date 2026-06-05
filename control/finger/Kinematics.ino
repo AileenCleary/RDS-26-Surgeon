@@ -283,6 +283,97 @@ void getPencilForwardKinematics(float q_splay_deg, float q_mcp_deg, float q_pip_
   tip_out[2] = z_planar;
 }
 
+void calculateJointAnglesFromPencil(float* target, float* joints_out) {
+  const int MAX_ITERATIONS = 200;
+  const float LEARNING_RATE = 0.01f;
+  const float TOLERANCE = 0.5f; 
+  const float DELTA = 1.0f;
+
+  float current[3], p_splay[3], p_mcp[3], p_pip[3];
+
+  for (int i = 0; i < MAX_ITERATIONS; i++) {
+    getPencilForwardKinematics(joints_out[0], joints_out[1], joints_out[2], current);
+    
+    float err_x = target[0] - current[0];
+    float err_y = target[1] - current[1];
+    float err_z = target[2] - current[2];
+    
+    float dist = sqrt(err_x*err_x + err_y*err_y + err_z*err_z);
+    if (dist < TOLERANCE) break;
+
+    getPencilForwardKinematics(joints_out[0] + DELTA, joints_out[1], joints_out[2], p_splay);
+    getPencilForwardKinematics(joints_out[0], joints_out[1] + DELTA, joints_out[2], p_mcp);
+    getPencilForwardKinematics(joints_out[0], joints_out[1], joints_out[2] + DELTA, p_pip);
+
+    float d_splay = ((p_splay[0] - current[0])/DELTA)*err_x + 
+                    ((p_splay[1] - current[1])/DELTA)*err_y + 
+                    ((p_splay[2] - current[2])/DELTA)*err_z;
+                    
+    float d_mcp   = ((p_mcp[0] - current[0])/DELTA)*err_x + 
+                    ((p_mcp[1] - current[1])/DELTA)*err_y + 
+                    ((p_mcp[2] - current[2])/DELTA)*err_z;
+                    
+    float d_pip   = ((p_pip[0] - current[0])/DELTA)*err_x + 
+                    ((p_pip[1] - current[1])/DELTA)*err_y + 
+                    ((p_pip[2] - current[2])/DELTA)*err_z;
+
+    joints_out[0] += LEARNING_RATE * d_splay;
+    joints_out[1] += LEARNING_RATE * d_mcp;
+    joints_out[2] += LEARNING_RATE * d_pip;
+
+    joints_out[0] = constrain(joints_out[0], -10.0f, 10.0f);
+    joints_out[1] = constrain(joints_out[1], -90.0f, 0.0f);
+    joints_out[2] = constrain(joints_out[2], -90.0f, 0.0f);
+  }
+  
+  joints_out[3] = joints_out[2] * DIP_COUPLING_RATIO;
+}
+
+void getFeedforwardMotorTorques(float Fz_N, float* tau_motor_out) {
+  float J[3][3];
+  calculateJacobian(J);
+
+  // If the finger pushes DOWN into the table (-Z), the table pushes UP (+Z) on the finger.
+  // We use this reaction force to map to joint torques: tau = J^T * F_env
+  float tau_joint[3];
+  for(int j=0; j<3; j++) {
+      tau_joint[j] = -J[2][j] * Fz_N; 
+  }
+
+  // Exact Decoupling for Tensions (with 0 baseline, so it ONLY adds pulling force, no slack)
+  float T[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  float R_mj[5][3];
+  for (int m = 0; m < 5; m++) {
+      for (int j = 0; j < 3; j++) {
+          R_mj[m][j] = -D[m][j] * (S[m][j] / 1000.0f);
+      }
+  }
+
+  // 1. PIP Joint
+  if (tau_joint[2] < 0.0f) { T[2] = tau_joint[2] / R_mj[2][2]; T[3] = 0.0f; }
+  else { T[3] = tau_joint[2] / R_mj[3][2]; T[2] = 0.0f; }
+
+  // 2. MCP Joint
+  float tau_mcp_disturb = R_mj[2][1]*T[2] + R_mj[3][1]*T[3];
+  float tau_mcp_req = tau_joint[1] - tau_mcp_disturb;
+  if (tau_mcp_req < 0.0f) { T[4] = tau_mcp_req / R_mj[4][1]; T[1] = 0.0f; }
+  else { T[1] = tau_mcp_req / R_mj[1][1]; T[4] = 0.0f; }
+
+  // 3. Splay Joint
+  float tau_splay_disturb = R_mj[1][0]*T[1] + R_mj[2][0]*T[2] + R_mj[3][0]*T[3] + R_mj[4][0]*T[4];
+  T[0] = (tau_joint[0] - tau_splay_disturb) / R_mj[0][0];
+
+  // Convert Tensions to Motor Torques
+  const float GEAR_RATIO = 25.62f;
+  const float EFFICIENCY = 0.85f;
+  for(int m = 0; m < 5; m++) {
+      if (m > 0) T[m] = constrain(T[m], 0.0f, 200.0f); // Positive tension only
+      else T[m] = constrain(T[m], -200.0f, 200.0f); // M0 is a belt, can pull both ways
+
+      tau_motor_out[m] = -T[m] * (R_MOTOR[m] / 1000.0f) / (GEAR_RATIO * EFFICIENCY) * MOTOR_DIR[m];
+  }
+}
+
 int getLetterPoints(char letter, float out_pts[20][2]) {
   letter = toupper(letter); // Ensure uppercase
   
