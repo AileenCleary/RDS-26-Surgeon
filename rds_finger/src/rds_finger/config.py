@@ -1,19 +1,18 @@
+"""
+config.py: Configuration file for tendon paths, pulleys, and bearings. Last updated: Aileen Cleary, 04/15/2026
+"""
+
 import numpy as np
 from rds_finger.types.pulleys import Pulley
 from rds_finger.types.fixed_points import Point3D
 from rds_finger.types.bearings import Bearing
 
-# ===================================================================
-# Global Variables
-# ===================================================================
+# ==================== GLOBAL VARIABLES =============================
 GLOBAL_UP = np.array([0.0,0.0,1.0]) # global +z
 CW = -1
 CCW = 1
 
-# ===================================================================
-# Pulleys and Termination Points by Tendon
-# ===================================================================
-
+# ==================== PULLEYS AND TERMINATION POINTS BY TENDON =============================
 # BLUE
 START1 = Point3D(np.array([-25.0, 22.0, 36.0]), "START", "PIP_EXT")
 PULLEY1 = Pulley(np.array([7.0, 32.0, 36.0]), 10.0, [0.0, 0.0, 1.0], CCW, "PIP_EXT", "A")
@@ -65,9 +64,7 @@ PULLEY19 = Pulley(np.array([94, 27, 22.5]), 7.1, [0.0, 1.0, 0.0], CW, "INTERNAL_
 PULLEY20 = Pulley(np.array([133, 27, 22.5]), 10, [0.0, 1.0, 0.0], CCW, "INTERNAL_EXT", "3")
 END8 = Point3D(np.array([150, 27, 33]), "END", "INTERNAL_EXT")
 
-# ===================================================================
-# Bearings (Left & Right)
-# ===================================================================
+# ==================== BEARINGS =============================
 BEARING_A_L = Bearing(np.array([7.0, 32.0, 41]), [0.0, 0.0, 1.0], "A", "left", 266, 711)
 BEARING_A_R = Bearing(np.array([7.0, 32.0, 1]), [0.0, 0.0, 1.0], "A", "right", 266, 711)
 BEARING_0_L = Bearing(np.array([26.0, 32.0, 41]), [0.0, 0.0, 1.0], "0","left", 266, 711)
@@ -79,9 +76,7 @@ BEARING_2_R = Bearing(np.array([94, 47, 22.5]), [0.0, 1.0, 0.0], "2","right", 26
 BEARING_3_L = Bearing(np.array([133, 12, 22.5]), [0.0, 1.0, 0.0], "3","left", 266, 711)
 BEARING_3_R = Bearing(np.array([133, 47, 22.5]), [0.0, 1.0, 0.0], "3","right", 266, 711)
 
-# ===================================================================
-# Dictionaries
-# ===================================================================
+# ==================== DICTIONARIES =============================
 SHAFT_BEARINGS = {
     "A": {"left": BEARING_A_L, "right": BEARING_A_R},
     "0": {"left": BEARING_0_L, "right": BEARING_0_R},

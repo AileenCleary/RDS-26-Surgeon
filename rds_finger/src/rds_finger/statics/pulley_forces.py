@@ -1,3 +1,5 @@
+"""pulley_forces.py: Solves for forces on pulleys transmitted by tendons, then transmitted from pulleys to bearings for statics analysis."""
+
 import numpy as np
 from rds_finger.statics.utils import unit
 from rds_finger.statics.tangent import (

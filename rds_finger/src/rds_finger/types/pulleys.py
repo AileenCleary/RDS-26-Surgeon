@@ -1,3 +1,7 @@
+"""
+pulleys.py: Pulley object class for tendon routing and force analysis. Last updated: Aileen Cleary, 04/13/2026
+"""
+
 import numpy as np
 
 class Pulley:

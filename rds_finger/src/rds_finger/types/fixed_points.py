@@ -1,3 +1,7 @@
+"""
+fixed_points.py: Fixed points object class for tendon routing purposes. Last updated: Aileen Cleary, 04/13/2026
+"""
+
 import numpy as np
 
 class Point3D:

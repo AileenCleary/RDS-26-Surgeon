@@ -1,3 +1,7 @@
+"""
+bearings.py: Bearing object class for bearing force analysis. Last updated: Aileen Cleary, 04/13/2026
+"""
+
 import numpy as np
 
 class Bearing:

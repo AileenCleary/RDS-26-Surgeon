@@ -1,3 +1,5 @@
+"""tangent.py: Solves for the tangent points given a tendon route of fixed points (end, start, axis-transitions) and pulleys. Used for statics analysis for force vector direction and for tendon route plotting."""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, List

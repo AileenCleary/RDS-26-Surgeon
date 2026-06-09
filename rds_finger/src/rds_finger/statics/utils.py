@@ -1,3 +1,5 @@
+"""utils.py: Helper functions for geometric operations and translations."""
+
 import numpy as np
 from typing import Tuple
 

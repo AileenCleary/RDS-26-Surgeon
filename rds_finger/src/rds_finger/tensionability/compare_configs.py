@@ -1,3 +1,6 @@
+"""compare_configs.py: Checks if a system is tensionable (origin inside the convex hull), plots the convex hull, and calculates other metrics of the system
+to try to compare different configurations. Debugging, code for plotting and graphs, and printing results assisted by AI."""
+
 import math
 
 import numpy as np
@@ -154,103 +157,7 @@ def fmt(x):
     return "—" if x is None else f"{x:.4g}"
 
 
-def bottleneck_indices(T_star, t_star, eps=1e-6):
-    """Which tendons are actually limiting t* (the ones near the minimum)."""
-    if T_star is None or t_star is None:
-        return []
-    T_star = np.asarray(T_star, float).reshape(-1)
-
-    # keep it relative so this behaves even if t* is tiny
-    tol = max(float(eps), 1e-3 * float(max(1.0, abs(t_star))))
-    return np.where(T_star <= t_star + tol)[0].tolist()
-
-
-def hull_face_margin_to_origin(S):
-    """How deep the origin is inside the hull (geometric margin).
-
-    If inside, each hull face is a plane. For each face plane, measure distance
-    from origin to that plane, then take the minimum, i.e., the smallest "gap" from origin to any hull face.
-    Larger margin => origin is deeper => more geometric slack.
-    """
-    P = np.asarray(S, float).T
-
-    # if hull is degenerate (points coplanar etc), ConvexHull can explode
-    try:
-        hull = ConvexHull(P)
-    except Exception:
-        return None
-
-    best = np.inf
-
-    # convex polytope can be written as an intersection of halfspaces
-    # hull.equations gives outward normals directly:
-    #   n·x + d = 0 for points on face
-    #   n·x + d <= 0 for points inside the hull
-    for eq in hull.equations:
-        n = eq[:3]
-        d = float(eq[3])
-
-        nn = float(np.linalg.norm(n))
-        if nn < 1e-12:
-            continue
-
-        # distance from origin to plane is |d|/||n||.
-        # for inside points, origin should satisfy d <= 0, so distance = -d/||n||.
-        dist = (-d) / nn
-        if dist < best:
-            best = dist
-
-    if not np.isfinite(best):
-        return None
-    return float(best)
-
-def normalized_hull_volume(S):
-    P = np.asarray(S, float).T
-    V = float(ConvexHull(P).volume)
-    norms = np.linalg.norm(P, axis=1)
-    scale = float(np.mean(norms))
-    if scale < 1e-12:
-        return None
-    return V / (scale**3)
-
-from scipy.optimize import linprog
-
-def support_radius(S, u):
-    S = np.asarray(S, float)
-    u = np.asarray(u, float).reshape(3)
-    n = S.shape[1]
-    # maximize u^T S T  == minimize -(u^T S) T
-    c = -(u @ S)  # shape (n,)
-    A_eq = np.ones((1, n))
-    b_eq = np.array([1.0])
-    res = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=[(0.0, None)]*n, method="highs")
-    if not res.success:
-        return None
-    return -float(res.fun)
-
-def random_unit_vectors(m, rng=np.random.default_rng(0)):
-    X = rng.normal(size=(m, 3))
-    X /= np.linalg.norm(X, axis=1, keepdims=True)
-    return X
-
-def directional_capability_metrics(S, m=400, seed=0):
-    dirs = random_unit_vectors(m, np.random.default_rng(seed))
-    rs = []
-    for u in dirs:
-        r = support_radius(S, u)
-        if r is not None:
-            rs.append(r)
-    rs = np.array(rs, float)
-    if rs.size == 0:
-        return None
-    return {
-        "r_mean": float(rs.mean()),
-        "r_min": float(rs.min()),
-        "r_max": float(rs.max()),
-        "isotropy": float(rs.min() / rs.max()) if rs.max() > 1e-12 else None,
-    }
 VERBOSE = True
-VERBOSE2 = True
 
 if __name__ == "__main__":
     """
@@ -299,9 +206,6 @@ if __name__ == "__main__":
         t_star, T_star = solve_t_star(S) if inside else (None, None)
         rho = normalized_robustness(t_star, S.shape[1]) if inside else None
 
-        bottlenecks = bottleneck_indices(T_star, t_star) if inside else []
-        margin = hull_face_margin_to_origin(S) if inside else None
-
         dist = distance_to_hull(S) if not inside else None
 
         ax = fig.add_subplot(rows, cols, idx + 1, projection="3d")
@@ -309,8 +213,6 @@ if __name__ == "__main__":
 
         color = colors[idx % len(colors)]
         P, vol = plot_hull(ax, S, color)
-        vol_norm = normalized_hull_volume(S)
-        t_dict = directional_capability_metrics(S)
         all_pts.append(P)
 
         ax.set_xlabel("τ₁")
@@ -335,15 +237,8 @@ if __name__ == "__main__":
             "rho": rho,
             "dist": dist,
             "volume": vol,
-            "vol_norm": vol_norm,
-            "margin": margin,
             "T_star": T_star,
-            "bottlenecks": bottlenecks,
             "tendon_names": names,
-            "r_mean": t_dict["r_mean"],
-            "r_min": t_dict["r_min"],
-            "r_max": t_dict["r_max"],
-            "isotropy": t_dict["isotropy"],
         })
 
     set_equal_limits(axes, all_pts)
@@ -378,34 +273,4 @@ if __name__ == "__main__":
             print(f"   rho    : {fmt(r['rho'])}")
             print(f"   dist   : {fmt(r['dist'])}")
             print(f"   volume : {fmt(r['volume'])}")
-            print(f"   norm volume : {fmt(r['vol_norm'])}")
-            print(f"   margin : {fmt(r['margin'])}")
-            print(f"   r_mean : {fmt(r['r_mean'])}")
-            print(f"   r_min : {fmt(r['r_min'])}")
-            print(f"   r_max  : {fmt(r['r_max'])}")
-            print(f"   isotropy : {fmt(r['isotropy'])}")
 
-            if VERBOSE2:
-                T = r.get("T_star", None)
-                if T is None:
-                    continue
-
-                T = np.asarray(T, float).reshape(-1)
-                n = T.size
-
-                names = r.get("tendon_names", None)
-                if not names:
-                    names = [f"tendon_{j}" for j in range(n)]
-                else:
-                    names = list(names)[:n] + [f"tendon_{j}" for j in range(len(names), n)]
-
-                bn = r.get("bottlenecks", [])
-                if bn:
-                    print("   bottleneck tendons:")
-                    for j in bn:
-                        print(f"      - {names[j]:<24}  T = {T[j]:.6g}")
-
-                print("   \noptimal preload distribution (T_star, sum=1):")
-                for j in np.argsort(-T):
-                    print(f"      {names[j]:<24}  {T[j]:.6g}")
-        

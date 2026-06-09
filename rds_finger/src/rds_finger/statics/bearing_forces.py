@@ -1,3 +1,5 @@
+"""bearing_forces.py: Solve for bearing forces and compute bearing lifespan, and other metrics for analysis. Output formatting and printing assisted by AI."""
+
 import numpy as np
 
 from rds_finger.statics.utils import shaft_coord, unit

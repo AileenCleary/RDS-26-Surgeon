@@ -1,3 +1,5 @@
+"""plot_tangents.py: Main code used to plot the tangent paths for tendon routing. Assisted by AI."""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  registers '3d' projection

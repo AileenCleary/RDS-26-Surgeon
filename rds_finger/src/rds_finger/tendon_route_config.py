@@ -1,3 +1,7 @@
+"""
+tendon_route_config.py: Most recent tendon route configuration. Last updated: Aileen Cleary, 05/11/2026
+"""
+
 import numpy as np
 from rds_finger.tensionability.route_configs import RouteConfig
 

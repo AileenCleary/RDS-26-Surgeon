@@ -1,3 +1,5 @@
+"""plot_all_tendon_paths.py: Code used to generate and plot the tendon route path plots. Assisted by AI."""
+
 """
 Generate tangent visualization plots for every tendon path defined in config.py.
 

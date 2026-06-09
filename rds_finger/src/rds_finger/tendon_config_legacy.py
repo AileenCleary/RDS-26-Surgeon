@@ -1,3 +1,7 @@
+"""
+tendon_config_legacy.py: Different tendon route configurations for comparison -- LEGACY. Last updated: Aileen Cleary, 05/11/2026
+"""
+
 import numpy as np
 from rds_finger.tensionability.route_configs import RouteConfig
 

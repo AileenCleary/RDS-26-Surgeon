@@ -1,3 +1,5 @@
+"""format_helpers.py: Helper functions for formatting and printing statics results. Assisted by AI."""
+
 import numpy as np
 
 def fmt_vec(v, prec=2):

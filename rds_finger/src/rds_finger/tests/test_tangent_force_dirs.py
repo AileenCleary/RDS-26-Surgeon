@@ -1,3 +1,5 @@
+"""test_tangent_force_dir.py: Used for debugging tendon routing calculations. Test generation and debugging code assisted by AI."""
+
 import numpy as np
 
 from rds_finger.config import CW, CCW
