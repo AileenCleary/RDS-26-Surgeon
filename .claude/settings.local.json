@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"\\\\\\\\wsl.localhost\\\\Ubuntu\\\\home\\\\aclea\\\\Northwestern\\\\RDS\\\\RDS-26-Surgeon\\\\rds_finger\")",
+      "Bash(python -m rds_finger.statics.plot_all_tendon_paths)"
+    ]
+  }
+}
